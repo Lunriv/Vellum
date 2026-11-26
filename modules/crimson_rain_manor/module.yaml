@@ -1,0 +1,88 @@
+moduleId: crimson_rain_manor
+version: "1.0.0"
+title: 绯雨庄园
+openingPrologue: "1927 年深秋，连日暴雨把山路洗成一条黑色的河。你们受邀来到绯雨庄园，调查一封没有署名的委托函，以及庄园主人 Evelyn 夜里不愿提及的失踪案。"
+investigators:
+  - investigatorId: investigator_reporter
+    name: 林砚
+    occupation: 敏锐记者
+    tagline: "把沉默写成头条的人"
+    biography: "曾在上海报馆追查贪腐案，擅长从细节和人的停顿中拼出真相。"
+    motivation: "查清旧剪报中被删去的名字，证明失踪案并非意外。"
+    manorConnection: "三年前曾采访过庄园捐赠的孤儿院。"
+    hpMax: 10
+    mpMax: 12
+    sanStart: 55
+    luckStart: 50
+    strengths:
+      - { skill: spot_hidden, label: 侦查, rating: 70 }
+      - { skill: psychology, label: 心理学, rating: 65 }
+      - { skill: persuade, label: 说服, rating: 60 }
+    startingItems:
+      - { itemId: fountain_pen, name: 钢笔, description: "一支沾着报馆墨水的钢笔。" }
+      - { itemId: pocket_camera, name: 小型相机, description: "可记录现场的老式相机。" }
+    characteristics: { INT: 75, EDU: 70, DEX: 60, POW: 55, CON: 50, SIZ: 50, APP: 55, STR: 45 }
+    skills: { spot_hidden: 70, psychology: 65, persuade: 60, locksmith: 25, dodge: 30 }
+  - investigatorId: investigator_detective
+    name: 周沉
+    occupation: 退役警探
+    tagline: "见过太多不合常理的现场"
+    biography: "在租界巡捕房任职多年，离职后仍保留着谨慎的现场习惯。"
+    motivation: "找出一名旧同僚当年未能结案的庄园命案。"
+    manorConnection: "旧案卷宗中出现过庄园管家 Arthur 的签名。"
+    hpMax: 12
+    mpMax: 10
+    sanStart: 50
+    luckStart: 45
+    strengths:
+      - { skill: spot_hidden, label: 侦查, rating: 65 }
+      - { skill: intimidate, label: 恐吓, rating: 60 }
+      - { skill: fighting, label: 格斗, rating: 55 }
+    startingItems:
+      - { itemId: badge_case, name: 旧警徽盒, description: "一枚退役前留下的警徽。" }
+      - { itemId: service_revolver, name: 旧式左轮, description: "登记在册、仅剩少量子弹的左轮手枪。" }
+    characteristics: { STR: 65, CON: 60, SIZ: 60, DEX: 55, INT: 60, EDU: 65, POW: 50, APP: 40 }
+    skills: { spot_hidden: 65, intimidate: 60, fighting: 55, psychology: 45, locksmith: 35, dodge: 40 }
+  - investigatorId: investigator_doctor
+    name: 沈清辞
+    occupation: 家族医生
+    tagline: "能从伤口读出一个人的谎言"
+    biography: "受过西医训练，曾为庄园附近的矿工诊治，对异常伤口格外敏感。"
+    motivation: "保护病人 Mary，并确认庄园的血迹是否来自活人。"
+    manorConnection: "Evelyn 的母亲曾是她在医学院的资助人。"
+    hpMax: 10
+    mpMax: 14
+    sanStart: 60
+    luckStart: 55
+    strengths:
+      - { skill: medicine, label: 医学, rating: 75 }
+      - { skill: science, label: 科学, rating: 60 }
+      - { skill: psychology, label: 心理学, rating: 55 }
+    startingItems:
+      - { itemId: medical_bag, name: 医药箱, description: "装有绷带、酒精和基础药品。" }
+      - { itemId: brass_loupe, name: 黄铜放大镜, description: "用于观察纤维和微小血迹。" }
+    characteristics: { INT: 70, EDU: 80, DEX: 50, POW: 60, CON: 50, SIZ: 45, APP: 55, STR: 40 }
+    skills: { medicine: 75, science: 60, psychology: 55, spot_hidden: 45, locksmith: 20, dodge: 25 }
+initialSceneId: manor_foyer
+endings:
+  - endingId: expose_the_ritual
+    title: 雨幕下的揭露
+    summary: "调查员以两条核心结论和现场证据对质，阻止了酒窖仪式。"
+    condition:
+      all:
+        - clue_discovered: conclusion_ritual
+        - clue_discovered: conclusion_motive
+        - evidence_presented: cellar_ledger_clue
+  - endingId: escape_the_manor
+    title: 带着证据离开
+    summary: "在倒计时结束前带走账本和剪报，庄园的秘密留给后来者。"
+    condition:
+      all:
+        - clue_discovered: cellar_ledger_clue
+        - any:
+            - clue_discovered: manor_clipping_clue
+            - clue_discovered: bloodstained_cuff_clue
+reviewFacts:
+  - { factId: fact_ritual, title: 仪式真相, detail: "Evelyn 借暴雨和古老家族仪式掩盖了酒窖中的献祭准备。", sourceClueIds: [conclusion_ritual] }
+  - { factId: fact_motive, title: 动机, detail: "Evelyn 试图以仪式换回家族声望，Arthur 和 Mary 分别被迫协助与隐瞒。", sourceClueIds: [conclusion_motive] }
+  - { factId: fact_missing_guest, title: 失踪者, detail: "三年前的访客并未离开庄园，旧剪报被人为删改。", sourceClueIds: [manor_clipping_clue] }

@@ -1,0 +1,42 @@
+- handoutId: commission_letter
+  kind: letter
+  title: 初始委托函
+  canonical: true
+  clueId: commission_letter_clue
+  sourceFacts:
+    - "委托要求调查三年前庄园访客的失踪。"
+    - "委托人要求优先查验酒窖。"
+  presentationText: |
+    林先生/女士：
+    若你收到这封信，请在下一个雨夜抵达绯雨庄园。三年前来此的人没有离开，而今夜酒窖将再次点灯。请带走能证明这一点的东西。
+  unlockCondition: always
+- handoutId: bloodstained_cuff_note
+  kind: report
+  title: 沾血袖口勘验记
+  canonical: true
+  clueId: bloodstained_cuff_clue
+  sourceFacts:
+    - "袖口绣有庄园旧徽记。"
+    - "血迹来自近期外伤，未与现任医生的血型记录相符。"
+  presentationText: "纤维检验显示，袖口曾接触酒窖蜡油与新鲜血迹。"
+  unlockCondition: { clue_discovered: bloodstained_cuff_clue }
+- handoutId: manor_clipping
+  kind: newspaper
+  title: 庄园旧剪报
+  canonical: true
+  clueId: manor_clipping_clue
+  sourceFacts:
+    - "三年前的访客在暴雨夜失踪。"
+    - "报纸原文有一段被剪除。"
+  presentationText: "《晨钟报》：本报记者最后一次见到访客是在绯雨庄园的东侧门。"
+  unlockCondition: { clue_discovered: manor_clipping_clue }
+- handoutId: cellar_ledger
+  kind: note
+  title: 酒窖账本
+  canonical: true
+  clueId: cellar_ledger_clue
+  sourceFacts:
+    - "账本记录蜡烛、药草与月相。"
+    - "末页写着今晚三点的仪式。"
+  presentationText: "账页末尾写着：第三声钟后，雨水会替我们抹去脚印。"
+  unlockCondition: { clue_discovered: cellar_ledger_clue }

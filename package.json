@@ -1,0 +1,13 @@
+{
+  "name": "vellum-workspace",
+  "private": true,
+  "packageManager": "pnpm@10.13.1",
+  "scripts": {
+    "check:arch": "node scripts/check-architecture-boundaries.mjs",
+    "web:dev": "pnpm --filter @vellum/web dev",
+    "web:typecheck": "pnpm --filter @vellum/web typecheck",
+    "web:lint": "pnpm --filter @vellum/web lint",
+    "web:test": "pnpm --filter @vellum/web test",
+    "web:build": "pnpm --filter @vellum/web build"
+  }
+}

@@ -1,0 +1,90 @@
+- entityId: butler_arthur
+  name: 老管家 Arthur
+  personality: "克制、礼貌而疲惫，习惯用整理袖口掩饰紧张。"
+  workingKnowledge:
+    - "庄园各房间的钥匙和每日作息。"
+    - "女主人要求任何人不得接近酒窖。"
+  coverStory: "昨夜只是风雨损坏了后门，庄园里没有客人失踪。"
+  behavioralTells:
+    - "提到三年前的访客时会擦拭右手拇指。"
+    - "听见酒窖钟声会立刻转移话题。"
+  protectedTruths:
+    - secretId: arthur_assistance
+      rawTruth: "Arthur 曾被 Evelyn 以家族债务胁迫，协助把失踪访客带入酒窖。"
+      tell: "他的钥匙串在雨夜会多出一把从未解释的铜钥匙。"
+      stages:
+        - tier: tell
+          predicate: { clue_discovered: bloodstained_cuff_clue }
+          releasableFactIds: [fact_missing_guest]
+          truth: "我只是在替主人保管旧钥匙，别再问了。"
+        - tier: partial
+          predicate: { all: [{ evidence_presented: cellar_ledger_clue }, { topic_confronted: missing_guest }] }
+          releasableFactIds: [fact_missing_guest, fact_motive]
+          truth: "那个人确实下过酒窖，我以为只是一次恐吓。"
+        - tier: confession
+          predicate: { all: [{ evidence_presented: conclusion_ritual }, { topic_confronted: ritual_truth }] }
+          releasableFactIds: [fact_ritual, fact_motive]
+          truth: "是我开的门。Evelyn 说家族只能靠这场仪式活下来。"
+  initialRelations:
+    - { entityId: lady_evelyn, relation: loyalty, value: 70 }
+    - { entityId: maid_mary, relation: protectiveness, value: 45 }
+- entityId: maid_mary
+  name: 女仆 Mary
+  personality: "胆怯、敏感，愿意帮助弱者但害怕失去工作。"
+  workingKnowledge:
+    - "昨夜三点听见酒窖钟声。"
+    - "Arthur 收走了厨房通往庭院的铁铲。"
+  coverStory: "我只负责偏厅和茶水，什么都没看见。"
+  behavioralTells:
+    - "听到 Evelyn 的名字会不自觉看向门口。"
+    - "被温和询问时会摩挲托盘边缘。"
+  protectedTruths:
+    - secretId: mary_witness
+      rawTruth: "Mary 看见 Evelyn 把带血的布包交给 Arthur，并在雨中清洗过后窗。"
+      tell: "她说到后窗时会把托盘移到身前。"
+      stages:
+        - tier: tell
+          predicate: { topic_confronted: bell_tower }
+          releasableFactIds: [fact_missing_guest]
+          truth: "我只听见钟声，真的没有下楼。"
+        - tier: partial
+          predicate: { evidence_presented: bloodstained_cuff_clue }
+          releasableFactIds: [fact_missing_guest]
+          truth: "我见过一个布包，但我不知道里面是什么。"
+        - tier: confession
+          predicate: { all: [{ evidence_presented: cellar_ledger_clue }, { topic_confronted: lady_evelyn }] }
+          releasableFactIds: [fact_ritual, fact_motive]
+          truth: "Evelyn 说只要完成仪式，失踪的人就会回来。"
+  initialRelations:
+    - { entityId: butler_arthur, relation: fear, value: 60 }
+    - { entityId: lady_evelyn, relation: fear, value: 55 }
+- entityId: lady_evelyn
+  name: 女主人 Evelyn
+  personality: "优雅、疏离而意志坚定，把家族荣誉看得高于个人安危。"
+  workingKnowledge:
+    - "庄园的来客名单和家族档案。"
+    - "调查员手里已有的公开委托内容。"
+  coverStory: "庄园只是遭遇连续暴雨，三年前的访客早已离开。"
+  behavioralTells:
+    - "提到家族徽记时会按住左腕。"
+    - "被问到酒窖会把话题转向天气。"
+  protectedTruths:
+    - secretId: evelyn_ritual
+      rawTruth: "Evelyn 以家族秘仪试图挽救衰败声望，失踪访客是仪式的牺牲品。"
+      tell: "她的左腕缠着写有月相符号的黑线。"
+      stages:
+        - tier: tell
+          predicate: { clue_discovered: manor_clipping_clue }
+          releasableFactIds: [fact_missing_guest]
+          truth: "那只是媒体夸张的旧闻。"
+        - tier: partial
+          predicate: { all: [{ evidence_presented: cellar_ledger_clue }, { clue_discovered: silver_mark_clue }] }
+          releasableFactIds: [fact_motive]
+          truth: "家族曾经有过一项仪式，但它已经被废弃。"
+        - tier: confession
+          predicate: { all: [{ clue_discovered: conclusion_ritual }, { clue_discovered: conclusion_motive }] }
+          releasableFactIds: [fact_ritual, fact_motive]
+          truth: "仪式今晚必须完成，否则庄园的一切都会归于尘土。"
+  initialRelations:
+    - { entityId: butler_arthur, relation: authority, value: 80 }
+    - { entityId: maid_mary, relation: authority, value: 65 }

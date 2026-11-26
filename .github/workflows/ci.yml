@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  architecture-guard:
+    name: Architecture Boundary Guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: node scripts/check-architecture-boundaries.mjs
+
+  server:
+    name: Rust Server (fmt, clippy, test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check if Rust workspace is initialized
+        id: rust_check
+        run: |
+          if [ -f "Cargo.toml" ] && [ -f "apps/server/Cargo.toml" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.rust_check.outputs.exists == 'true'
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        if: steps.rust_check.outputs.exists == 'true'
+      - name: Format check
+        if: steps.rust_check.outputs.exists == 'true'
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        if: steps.rust_check.outputs.exists == 'true'
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Test
+        if: steps.rust_check.outputs.exists == 'true'
+        run: cargo test --workspace
+
+  web:
+    name: React Web (typecheck, lint, test, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check if Web app is initialized
+        id: web_check
+        run: |
+          if [ -f "apps/web/package.json" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: pnpm/action-setup@v4
+        if: steps.web_check.outputs.exists == 'true'
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        if: steps.web_check.outputs.exists == 'true'
+        with:
+          node-version: "24"
+          cache: "pnpm"
+      - name: Install dependencies
+        if: steps.web_check.outputs.exists == 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        if: steps.web_check.outputs.exists == 'true'
+        run: pnpm --filter @vellum/web typecheck
+      - name: Lint
+        if: steps.web_check.outputs.exists == 'true'
+        run: pnpm --filter @vellum/web lint
+      - name: Unit tests
+        if: steps.web_check.outputs.exists == 'true'
+        run: pnpm --filter @vellum/web test
+      - name: Build
+        if: steps.web_check.outputs.exists == 'true'
+        run: pnpm --filter @vellum/web build

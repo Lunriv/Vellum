@@ -1,0 +1,58 @@
+- sceneId: manor_foyer
+  title: 门厅与外廊
+  atmosphere: rain_manor
+  description: "高窗外雨线如帘，湿冷的外廊通向庄园的几个阴影角落。"
+  tags: [entry, rain, social]
+  exits:
+    - { targetSceneId: study_room, label: 前往书房, bidirectional: true }
+    - { targetSceneId: cellar_entrance, label: 前往酒窖入口, bidirectional: true, condition: { clue_discovered: commission_letter_clue } }
+    - { targetSceneId: maids_parlor, label: 前往女仆偏厅, bidirectional: true }
+    - { targetSceneId: rain_courtyard, label: 前往暴雨庭院, bidirectional: true }
+  entities:
+    - { entityId: butler_arthur, name: 老管家 Arthur, role: gatekeeper, kind: npc, summary: "守在壁炉旁的老管家。" }
+    - { entityId: manor_portrait, name: 家族肖像, role: object, kind: object, summary: "一幅被雨雾映得发暗的家族肖像。", clueIds: [manor_clipping_clue] }
+- sceneId: study_room
+  title: 书房
+  atmosphere: candlelight
+  description: "烛火在书桌和锁住的抽屉上摇晃，旧报纸的边角从书架后露出。"
+  tags: [investigation, archive]
+  exits:
+    - { targetSceneId: manor_foyer, label: 返回门厅, bidirectional: true }
+    - { targetSceneId: rain_courtyard, label: 推门去庭院, bidirectional: true }
+  entities:
+    - { entityId: study_desk, name: 书桌与抽屉, role: object, kind: object, summary: "锁住的书桌抽屉里有一枚沾血袖口。", clueIds: [bloodstained_cuff_clue] }
+    - { entityId: old_newspaper_stack, name: 庄园旧剪报, role: object, kind: object, summary: "被剪掉关键段落的旧报纸。", clueIds: [manor_clipping_clue] }
+    - { entityId: lady_evelyn, name: 女主人 Evelyn, role: host, kind: npc, summary: "坐在窗边、拒绝谈论三年前来客的女主人。" }
+- sceneId: cellar_entrance
+  title: 酒窖入口
+  atmosphere: fog
+  description: "石阶向下没入湿雾，门缝里透出铁锈和蜡油的气味。"
+  tags: [danger, ritual, underground]
+  exits:
+    - { targetSceneId: manor_foyer, label: 返回门厅, bidirectional: true }
+    - { targetSceneId: rain_courtyard, label: 从后门去庭院, bidirectional: false }
+  entities:
+    - { entityId: cellar_door, name: 酒窖铁门, role: object, kind: object, summary: "需要工具或锁匠技巧才能打开的铁门。", clueIds: [cellar_ledger_clue] }
+    - { entityId: cellar_ledger, name: 酒窖账本, role: object, kind: object, summary: "记录蜡烛、药草和失踪者姓名的账本。", clueIds: [cellar_ledger_clue] }
+- sceneId: maids_parlor
+  title: 女仆偏厅
+  atmosphere: candlelight
+  description: "狭小偏厅里晾着湿衣，女仆们压低声音谈论昨夜的钟声。"
+  tags: [social, servants]
+  exits:
+    - { targetSceneId: manor_foyer, label: 返回门厅, bidirectional: true }
+    - { targetSceneId: study_room, label: 侧门通往书房, bidirectional: false }
+  entities:
+    - { entityId: maid_mary, name: 女仆 Mary, role: witness, kind: npc, summary: "握着托盘、明显害怕管家的女仆。", clueIds: [mary_testimony_clue] }
+    - { entityId: service_tray, name: 银托盘, role: object, kind: object, summary: "托盘背面刻着庄园旧徽记。", clueIds: [silver_mark_clue] }
+- sceneId: rain_courtyard
+  title: 暴雨庭院
+  atmosphere: san_strain
+  description: "雨水冲刷石板，庭院尽头的温室和后窗被铁链封住。"
+  tags: [outside, rain, off_rail]
+  exits:
+    - { targetSceneId: manor_foyer, label: 回到门厅, bidirectional: true }
+    - { targetSceneId: cellar_entrance, label: 绕到酒窖后门, bidirectional: false }
+    - { targetSceneId: study_room, label: 回到书房, bidirectional: true }
+  entities:
+    - { entityId: greenhouse, name: 荒废温室, role: object, kind: object, summary: "玻璃后留有新鲜泥痕和断裂的铁铲柄。", clueIds: [courtyard_tracks_clue] }

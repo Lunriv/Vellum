@@ -1,0 +1,101 @@
+- clueId: commission_letter_clue
+  title: 无署名委托函
+  summary: "委托人要求调查三年前庄园访客的失踪，并特别提到酒窖。"
+  sourceLabel: 初始委托函
+  sceneIds: [manor_foyer]
+  acquisitionPaths:
+    - { pathId: letter_read, description: "阅读随身委托函", condition: always }
+- clueId: bloodstained_cuff_clue
+  title: 沾血袖口
+  summary: "袖口内侧有旧式家族刺绣和不属于当前庄园医生的血迹。"
+  sourceLabel: 书房锁抽屉
+  sceneIds: [study_room]
+  acquisitionPaths:
+    - pathId: drawer_open
+      description: "撬开或找到书桌抽屉钥匙"
+      condition: { any: [{ skill_success: locksmith }, { clue_discovered: silver_mark_clue }] }
+- clueId: manor_clipping_clue
+  title: 庄园旧剪报
+  summary: "剪报记载三年前的访客失踪，原文被人剪掉一段。"
+  sourceLabel: 书房旧报纸
+  sceneIds: [study_room, manor_foyer]
+  acquisitionPaths:
+    - { pathId: shelf_search, description: "在书架后找到剪报", condition: { skill_success: spot_hidden } }
+    - { pathId: portrait_hint, description: "从肖像背后的夹层取出剪报", condition: { clue_discovered: silver_mark_clue } }
+- clueId: cellar_ledger_clue
+  title: 酒窖账本
+  summary: "账本记录月相、蜡烛和失踪者姓名，末页写着今晚的仪式时间。"
+  sourceLabel: 酒窖铁门后的账本
+  sceneIds: [cellar_entrance]
+  acquisitionPaths:
+    - { pathId: lockpick_cellar, description: "撬开酒窖铁门", condition: { skill_success: locksmith } }
+    - { pathId: courtyard_window, description: "从庭院后窗进入酒窖", condition: { event_occurred: courtyard_window_opened } }
+- clueId: mary_testimony_clue
+  title: Mary 的钟声证词
+  summary: "Mary 说昨夜三点听见酒窖传来三次钟声，Arthur 禁止她靠近。"
+  sourceLabel: 女仆偏厅对话
+  sceneIds: [maids_parlor]
+  acquisitionPaths:
+    - { pathId: gentle_question, description: "安抚 Mary 后询问", condition: { topic_confronted: bell_tower } }
+    - { pathId: show_cuff, description: "出示沾血袖口取得信任", condition: { evidence_presented: bloodstained_cuff_clue } }
+- clueId: silver_mark_clue
+  title: 旧徽记
+  summary: "银托盘上的徽记与袖口刺绣相同，指向家族仪式用品。"
+  sourceLabel: 女仆偏厅银托盘
+  sceneIds: [maids_parlor]
+  acquisitionPaths:
+    - { pathId: tray_inspection, description: "检查银托盘背面", condition: always }
+- clueId: courtyard_tracks_clue
+  title: 庭院泥痕
+  summary: "温室外的泥痕通向酒窖后窗，足迹显示有人在雨中搬运重物。"
+  sourceLabel: 暴雨庭院
+  sceneIds: [rain_courtyard]
+  acquisitionPaths:
+    - { pathId: track_search, description: "在庭院查看泥痕", condition: { skill_success: spot_hidden } }
+    - { pathId: doctor_observation, description: "以医学经验识别泥痕中的血纤维", condition: { skill_success: medicine } }
+- clueId: butler_contradiction_clue
+  title: 管家口供矛盾
+  summary: "Arthur 声称昨晚没有人下楼，但他的袖口和钥匙都沾着酒窖蜡油。"
+  sourceLabel: 管家对质
+  sceneIds: [manor_foyer]
+  acquisitionPaths:
+    - { pathId: read_tell, description: "观察管家微表情", condition: { skill_success: psychology } }
+    - { pathId: present_ledger, description: "当面出示账本", condition: { evidence_presented: cellar_ledger_clue } }
+- clueId: conclusion_ritual
+  title: 酒窖仪式结论
+  summary: "庄园正在以失踪者和暴雨为掩护筹备一场古老仪式。"
+  sourceLabel: 多份现场证据交叉印证
+  isConclusion: true
+  sceneIds: [cellar_entrance, study_room]
+  requires:
+    all:
+      - any:
+          - clue_discovered: cellar_ledger_clue
+          - clue_discovered: mary_testimony_clue
+      - any:
+          - clue_discovered: manor_clipping_clue
+          - clue_discovered: courtyard_tracks_clue
+  acquisitionPaths:
+    - pathId: ledger_and_clipping
+      description: "账本与剪报共同确认仪式时间线"
+      condition: { all: [{ clue_discovered: cellar_ledger_clue }, { clue_discovered: manor_clipping_clue }] }
+    - pathId: testimony_and_tracks
+      description: "Mary 的证词与庭院泥痕互相印证"
+      condition: { all: [{ clue_discovered: mary_testimony_clue }, { clue_discovered: courtyard_tracks_clue }] }
+- clueId: conclusion_motive
+  title: Evelyn 的动机结论
+  summary: "Evelyn 为挽救家族声望默许仪式，Arthur 与 Mary 被迫成为帮凶和证人。"
+  sourceLabel: NPC 口供与家族档案
+  isConclusion: true
+  sceneIds: [study_room, manor_foyer, maids_parlor]
+  requires:
+    any:
+      - all: [{ clue_discovered: butler_contradiction_clue }, { clue_discovered: manor_clipping_clue }]
+      - all: [{ clue_discovered: mary_testimony_clue }, { clue_discovered: silver_mark_clue }]
+  acquisitionPaths:
+    - pathId: butler_route
+      description: "管家矛盾口供与旧剪报揭示动机"
+      condition: { all: [{ clue_discovered: butler_contradiction_clue }, { clue_discovered: manor_clipping_clue }] }
+    - pathId: mary_route
+      description: "Mary 的证词与徽记揭示动机"
+      condition: { all: [{ clue_discovered: mary_testimony_clue }, { clue_discovered: silver_mark_clue }] }

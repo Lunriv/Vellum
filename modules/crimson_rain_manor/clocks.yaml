@@ -1,0 +1,18 @@
+- clockId: manor_anomaly
+  name: 庄园异象
+  visibility: player_visible
+  max: 6
+  stages:
+    - { at: 0, label: 雨声掩盖一切 }
+    - { at: 2, label: 烛火开始自行熄灭 }
+    - { at: 4, label: 酒窖钟声穿透暴雨 }
+    - { at: 6, label: 庄园进入仪式高潮 }
+- clockId: ritual_countdown
+  name: 仪式倒计时
+  visibility: keeper_hidden
+  max: 6
+  stages:
+    - { at: 0, label: 仪式尚未开始 }
+    - { at: 2, label: 仪式准备中 }
+    - { at: 4, label: 仪式即将完成 }
+    - { at: 6, label: 仪式完成 }

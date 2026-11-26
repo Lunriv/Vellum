@@ -1,0 +1,91 @@
+/*
+ * Vellum Design Tokens
+ * Light Theme = Direction A (纸墨档案室 · Vellum Editorial)
+ * Dark Theme  = Direction B (雨夜侦探稿 · Noir Casefile)
+ */
+
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+
+  --vellum-bg: #f6f2e9;
+  --vellum-surface: #fbf8f1;
+  --vellum-elevated: #efe9dc;
+  --vellum-ink: #1f1b17;
+  --vellum-muted: #655c52;
+  --vellum-border: #d9cfc0;
+  --vellum-border-strong: #bfb19c;
+
+  --vellum-accent: #8f2424;
+  --vellum-accent-hover: #751c1c;
+  --vellum-accent-soft: #f3e3e1;
+  --vellum-accent-ink: #fdf9f4;
+
+  --vellum-success: #2a5f42;
+  --vellum-success-soft: #e3efe7;
+  --vellum-warning: #8f5b14;
+  --vellum-warning-soft: #f5ebd9;
+  --vellum-danger: #8f2424;
+  --vellum-danger-soft: #f5e2e2;
+
+  /* Physical diegetic artifacts stay crisp paper-and-ink */
+  --vellum-handout-bg: #fffdf7;
+  --vellum-handout-border: #c9bba5;
+  --vellum-handout-ink: #262018;
+  --vellum-handout-muted: #6b5d4d;
+
+  /* Inline dice tray contrasts cleanly with the narrative stage */
+  --vellum-dice-bg: #26211c;
+  --vellum-dice-border: #3d352d;
+  --vellum-dice-ink: #f7f2e7;
+  --vellum-dice-muted: #c2b7a6;
+
+  --vellum-shadow-sm: 0 1px 2px rgba(31, 27, 23, 0.06);
+  --vellum-shadow-md: 0 4px 14px rgba(31, 27, 23, 0.08);
+
+  --vellum-font-serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", Georgia, serif;
+  --vellum-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --vellum-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  --vellum-radius-sm: 4px;
+  --vellum-radius-md: 7px;
+  --vellum-radius-lg: 10px;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --vellum-bg: #13171d;
+  --vellum-surface: #1a2029;
+  --vellum-elevated: #222936;
+  --vellum-ink: #e6e1d6;
+  --vellum-muted: #97a0ae;
+  --vellum-border: #2e3746;
+  --vellum-border-strong: #435066;
+
+  --vellum-accent: #c78a42;
+  --vellum-accent-hover: #d89b52;
+  --vellum-accent-soft: rgba(199, 138, 66, 0.16);
+  --vellum-accent-ink: #13171d;
+
+  --vellum-success: #5ba87f;
+  --vellum-success-soft: rgba(91, 168, 127, 0.16);
+  --vellum-warning: #d89b52;
+  --vellum-warning-soft: rgba(216, 155, 82, 0.16);
+  --vellum-danger: #d96b6b;
+  --vellum-danger-soft: rgba(217, 107, 107, 0.16);
+
+  /* Aged parchment handout lifted cleanly above the dark noir desk */
+  --vellum-handout-bg: #ede4d0;
+  --vellum-handout-border: #bfa980;
+  --vellum-handout-ink: #241e16;
+  --vellum-handout-muted: #5d503e;
+
+  --vellum-dice-bg: #0e1116;
+  --vellum-dice-border: #2e3746;
+  --vellum-dice-ink: #f2e7cf;
+  --vellum-dice-muted: #9ea7b4;
+
+  --vellum-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.28);
+  --vellum-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.36);
+}
