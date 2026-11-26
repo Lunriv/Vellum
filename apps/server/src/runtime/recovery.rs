@@ -55,7 +55,9 @@ pub async fn try_acquire_lease(
     let now_text = now.to_rfc3339();
     let expires_text = expires.to_rfc3339();
 
-    let mut tx = db.pool.begin().await?;
+    // Use BEGIN IMMEDIATE so concurrent lease acquisitions serialize cleanly via SQLite busy_timeout
+    // instead of hitting SQLite's deferred read-to-write upgrade SQLITE_BUSY deadlock.
+    let mut tx = db.pool.begin_with("BEGIN IMMEDIATE").await?;
     let turn_row = sqlx::query_as::<_, (String, i64)>(
         "SELECT status, narration_generation FROM turns WHERE id=?",
     )

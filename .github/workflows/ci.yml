@@ -64,8 +64,6 @@ jobs:
           fi
       - uses: pnpm/action-setup@v4
         if: steps.web_check.outputs.exists == 'true'
-        with:
-          version: 10
       - uses: actions/setup-node@v4
         if: steps.web_check.outputs.exists == 'true'
         with:

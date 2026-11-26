@@ -33,7 +33,7 @@ pub async fn create(
 ) -> Result<SessionMetaRow, sqlx::Error> {
     let now = Utc::now().to_rfc3339();
     let state_json = serde_json::to_string(state).unwrap_or_else(|_| "{}".into());
-    let mut tx = db.pool.begin().await?;
+    let mut tx = db.pool.begin_with("BEGIN IMMEDIATE").await?;
     sqlx::query(
         "INSERT INTO sessions(id,module_id,module_version,investigator_id,experience_mode,status,session_version,active_turn_id,created_at,updated_at) VALUES(?,?,?,?,?,'active',0,?,?,?)",
     )
@@ -155,7 +155,7 @@ pub async fn cas_snapshot(
 ) -> Result<bool, sqlx::Error> {
     let now = Utc::now().to_rfc3339();
     let state_json = serde_json::to_string(state).unwrap_or_else(|_| "{}".into());
-    let mut tx = db.pool.begin().await?;
+    let mut tx = db.pool.begin_with("BEGIN IMMEDIATE").await?;
 
     let updated = sqlx::query(
         "UPDATE sessions SET session_version=session_version+1, status=COALESCE(?, status), updated_at=? WHERE id=? AND session_version=?",
