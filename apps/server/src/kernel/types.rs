@@ -249,33 +249,71 @@ pub struct RecoveryEligibility {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ProposedCheck {
+    #[serde(default = "default_check_id")]
     pub check_id: String,
     pub skill: String,
+    #[serde(default = "default_difficulty")]
     pub difficulty: CheckDifficulty,
+    #[serde(default = "default_target_number")]
     pub target_number: u32,
+    #[serde(default)]
     pub bonus_penalty_dice: i8,
+    #[serde(default = "default_true")]
     pub allow_push: bool,
+    #[serde(default = "default_action_kind")]
     pub action_kind: String,
 }
+
+fn default_check_id() -> String {
+    "skill_check".into()
+}
+
+fn default_difficulty() -> CheckDifficulty {
+    CheckDifficulty::Regular
+}
+
+fn default_target_number() -> u32 {
+    50
+}
+
+fn default_action_kind() -> String {
+    "investigate".into()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ProposedEffect {
     pub effect_type: String,
+    #[serde(default)]
     pub target_id: Option<String>,
+    #[serde(default)]
     pub value: Option<i32>,
+    #[serde(default)]
     pub payload: Option<Value>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ActionProposal {
+    #[serde(default)]
     pub intent: String,
+    #[serde(default)]
     pub target_entity_ids: Vec<String>,
+    #[serde(default = "default_action_type")]
     pub action_type: String,
+    #[serde(default)]
     pub proposed_checks: Vec<ProposedCheck>,
+    #[serde(default)]
     pub proposed_effects: Vec<ProposedEffect>,
+    #[serde(default)]
     pub evidence_to_present: Vec<String>,
+    #[serde(default)]
     pub topics_to_confront: Vec<String>,
+    #[serde(default)]
     pub proposed_world_patches: Vec<DynamicWorldPatch>,
+}
+
+fn default_action_type() -> String {
+    "observe".into()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema)]

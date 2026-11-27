@@ -663,6 +663,21 @@ pub async fn run_player_turn(state: AppState, session_id: String, turn_id: Strin
     // If check is proposed -> create and persist PendingInterrupt(AwaitingRoll) BEFORE rolling!
     if let Some(check) = proposal.proposed_checks.first() {
         let _ = turn_repo::set_path_kind(&state.db, &turn_id, "C").await;
+        // Kernel owns authoritative character ratings; never let an LLM spoof the player's skill value.
+        let authoritative_target = session_state
+            .investigator
+            .skills
+            .get(&check.skill)
+            .or_else(|| {
+                session_state
+                    .investigator
+                    .characteristics
+                    .get(&check.skill.to_uppercase())
+            })
+            .copied()
+            .map(|v| v.clamp(1, 99) as u32)
+            .unwrap_or_else(|| check.target_number.clamp(1, 99));
+        let clamped_dice = check.bonus_penalty_dice.clamp(-2, 2);
         let interrupt = PendingInterrupt {
             interrupt_id: format!("int-{}", Uuid::new_v4()),
             session_id: session_id.clone(),
@@ -672,8 +687,8 @@ pub async fn run_player_turn(state: AppState, session_id: String, turn_id: Strin
             skill: check.skill.clone(),
             skill_label: skill_display_label(&check.skill).to_string(),
             difficulty: check.difficulty,
-            target_number: check.target_number,
-            bonus_penalty_dice: check.bonus_penalty_dice,
+            target_number: authoritative_target,
+            bonus_penalty_dice: clamped_dice,
             stakes_hint: "检定结果将直接影响现场进展；掷骰前可撤回或修改行动。".into(),
             allow_push: check.allow_push,
             action_kind: check.action_kind.clone(),
