@@ -482,4 +482,44 @@ describe("WorkspaceFlow end-to-end UI interactions", () => {
     await user.click(screen.getByRole("button", { name: "二楼书房" }));
     expect(mainInput).toHaveValue("前往二楼书房");
   });
+
+  it("auto-clears stale localStorage sessionId on 404 and returns to Turn 0 setup", async () => {
+    window.localStorage.setItem("vellum:session_id", "stale-deleted-session");
+    useGameStore.setState({ sessionId: "stale-deleted-session" });
+
+    vi.spyOn(vellumApi, "getSessionState").mockRejectedValueOnce(
+      new ApiError(404, "NOT_FOUND", "Session not found"),
+    );
+    vi.spyOn(vellumApi, "listInvestigators").mockResolvedValue({
+      moduleId: "crimson_rain_manor",
+      moduleTitle: "绯雨庄园",
+      investigators: [
+        {
+          investigatorId: "investigator_reporter",
+          name: "林砚",
+          occupation: "敏锐记者",
+          tagline: "把沉默写成头条的人",
+          biography: "擅长发现细节。",
+          motivation: "追查失踪案。",
+          manorConnection: "曾采访过庄园。",
+          hpMax: 10,
+          mpMax: 12,
+          sanStart: 55,
+          luckStart: 50,
+          strengths: [{ skill: "spot_hidden", label: "侦查", rating: 70 }],
+          startingItems: [{ itemId: "pen", name: "钢笔", description: "旧钢笔" }],
+        },
+      ],
+    });
+
+    render(
+      <QueryClientProvider client={createTestQueryClient()}>
+        <App />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("选择调查员身份")).toBeInTheDocument();
+    expect(window.localStorage.getItem("vellum:session_id")).toBeNull();
+    expect(screen.queryByText("无法恢复当前调查进度")).not.toBeInTheDocument();
+  });
 });

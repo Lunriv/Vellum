@@ -92,9 +92,36 @@ export function useSessionSync() {
     queryKey: ["sessionState", sessionId],
     queryFn: () => vellumApi.getSessionState(sessionId!),
     enabled: Boolean(sessionId),
+    retry: (failureCount, err) => {
+      if (err instanceof ApiError && err.status === 404) return false;
+      return failureCount < 2;
+    },
   });
 
   const sessionState = sessionQuery.data;
+
+  // Automatically clear stale localStorage sessionId when the backend reports 404 (e.g. fresh local DB)
+  useEffect(() => {
+    if (
+      sessionId &&
+      sessionQuery.isError &&
+      sessionQuery.error instanceof ApiError &&
+      sessionQuery.error.status === 404
+    ) {
+      syncedModeSessionRef.current = null;
+      hydratedTurnKeyRef.current = null;
+      setActiveDrawer(null);
+      setConnectionStatus("idle");
+      setSessionId(null);
+    }
+  }, [
+    sessionId,
+    sessionQuery.isError,
+    sessionQuery.error,
+    setActiveDrawer,
+    setConnectionStatus,
+    setSessionId,
+  ]);
 
   // Sync experienceMode and pendingInterrupt when sessionState arrives/updates
   useEffect(() => {
