@@ -49,6 +49,7 @@ function applyPatchToSessionState(
     },
     investigator: patch.investigator ? { ...prev.investigator, ...patch.investigator } : prev.investigator,
     currentScene: patch.currentScene ?? prev.currentScene,
+    mapRooms: patch.mapRooms ?? prev.mapRooms,
     visibleClocks: patch.visibleClocks ?? prev.visibleClocks,
     clues: mergedClues,
     handouts: mergedHandouts,

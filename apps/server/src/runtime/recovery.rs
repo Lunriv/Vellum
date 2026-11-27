@@ -5,11 +5,13 @@ use serde_json::json;
 use uuid::Uuid;
 
 use crate::kernel::TurnStatus;
+use crate::models::NarrationContext;
 use crate::persistence::{
     db::Database,
     event_repo::{self, TranscriptRecord},
     session_repo, turn_repo,
 };
+use crate::runtime::orchestrator;
 use crate::AppState;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -231,9 +233,16 @@ pub async fn run_narration_recovery(
         .and_then(|t| t.player_input)
         .unwrap_or_else(|| "继续观察当前现场".into());
 
+    let history = orchestrator::load_recent_history(&state.db, &session_id, 6).await;
+    let narration_ctx = NarrationContext {
+        history: &history,
+        outcome_summary: None,
+        is_opening: false,
+    };
+
     let chunks = match state
         .provider
-        .stream_narration(&turn_input, &session_state)
+        .stream_narration(&turn_input, &session_state, &narration_ctx)
         .await
     {
         Ok(c) => c,

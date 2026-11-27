@@ -65,9 +65,9 @@ const SESSION_STORAGE_KEY = "vellum:session_id";
 const LOW_SAN_STORAGE_KEY = "vellum:low_san_fx";
 
 function loadInitialTheme(): ThemeMode {
-  if (typeof window === "undefined") return "light";
+  if (typeof window === "undefined") return "dark";
   const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
-  return saved === "dark" ? "dark" : "light";
+  return saved === "light" ? "light" : "dark";
 }
 
 function loadInitialSessionId(): string | null {

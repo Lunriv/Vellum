@@ -5,6 +5,7 @@ import {
   ArrowRight,
   Briefcase,
   Compass,
+  Dices,
   Eye,
   Heart,
   RefreshCw,
@@ -34,20 +35,26 @@ const MODE_CARDS: Array<{
   {
     value: "guided",
     label: "引导",
-    description: "提供行动启发与检定后果说明，适合初次接触调查冒险的读者。",
+    description: "全程保留守秘人行动选项与检定风险提示，新手可一键轻松推进。",
   },
   {
     value: "classic",
     label: "经典",
-    badge: "默认",
-    description: "平衡阅读沉浸与清晰的检定决策，日常调查不打扰，关键时刻给足掌控。",
+    badge: "推荐",
+    description: "沙盘、骰盘与多声道剧场完整联动，保留 3 项即刻回应与自由输入。",
   },
   {
     value: "immersive",
     label: "沉浸",
-    description: "收起多余界面提示，让检定与线索自然融入字里行间。",
+    description: "隐藏快捷选项，仅保留手写自由扮演与实体骰盘，还原纯桌游体验。",
   },
 ];
+
+function investigatorTone(id: string): string {
+  if (id.includes("reporter")) return "#9d3338";
+  if (id.includes("detective")) return "#2c546e";
+  return "#2a6249";
+}
 
 export function TurnZeroSetup({ onSessionCreated }: TurnZeroSetupProps) {
   const experienceMode = useGameStore((s) => s.experienceMode);
@@ -103,25 +110,35 @@ export function TurnZeroSetup({ onSessionCreated }: TurnZeroSetupProps) {
   };
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
-      <header className="max-w-2xl">
-        <p className="text-xs font-semibold tracking-[0.16em] text-[var(--vellum-accent)]">
-          开篇卷宗 · 1920s 调查短篇
-        </p>
-        <h1 className="vellum-prose mt-2 text-2xl font-semibold text-[var(--vellum-ink)] sm:text-3xl">
-          {data?.moduleTitle ?? "绯雨庄园"}
-        </h1>
-        <p className="mt-2.5 text-sm leading-7 text-[var(--vellum-muted)]">
-          连绵秋雨封住了通往郊外山脊的旧道。一封字迹仓促的来信将你引向那座久未迎客的庄园——在推开铁门之前，请选择你的身份与阅读方式。
-        </p>
+    <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
+      <header className="vellum-wood-panel relative overflow-hidden rounded-[var(--vellum-radius-lg)] p-6 sm:p-8">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="max-w-2xl">
+            <p className="inline-flex items-center gap-1.5 text-xs font-bold tracking-[0.18em] text-[var(--vellum-brass)]">
+              <Dices className="h-3.5 w-3.5" />
+              <span>克苏鲁跑团桌 · 1927 调查短篇</span>
+            </p>
+            <h1 className="vellum-prose mt-2 text-2xl font-bold text-[var(--vellum-ink)] sm:text-3xl">
+              {data?.moduleTitle ?? "绯雨庄园"}
+            </h1>
+            <p className="mt-2.5 text-sm leading-7 text-[var(--vellum-muted)]">
+              连绵暴雨封住了通往山脊的旧道，一封无署名委托函将你引向这座秘而不宣的庄园。桌面沙盘已铺开，守秘人与庄园里的每一位知情者都在灯影下等着你的第一句发问。
+            </p>
+          </div>
+          <div className="hidden rounded-[var(--vellum-radius-md)] border border-[var(--vellum-wood-border)] bg-[var(--vellum-felt-bg)] px-4 py-3 text-right text-xs text-[#f4ead4] sm:block">
+            <div className="font-semibold text-[#f0d18c]">本桌配置</div>
+            <div className="mt-1 opacity-90">羊皮卷庄园沙盘 · 实体 d100 骰盘</div>
+            <div className="mt-0.5 opacity-90">多声道实时对戏 · 确定性内核裁定</div>
+          </div>
+        </div>
       </header>
 
       {isLoading ? (
         <section
           aria-live="polite"
-          className="mt-8 rounded-[var(--vellum-radius-md)] border border-[var(--vellum-border)] bg-[var(--vellum-surface)] p-6 shadow-[var(--vellum-shadow-sm)]"
+          className="mt-6 rounded-[var(--vellum-radius-md)] border border-[var(--vellum-border)] bg-[var(--vellum-surface)] p-6 shadow-[var(--vellum-shadow-sm)]"
         >
-          <p className="text-sm font-medium text-[var(--vellum-ink)]">正在调取调查员人事档案……</p>
+          <p className="text-sm font-medium text-[var(--vellum-ink)]">正在铺开调查员角色卡……</p>
           <div className="mt-4 grid gap-4 md:grid-cols-3">
             {[0, 1, 2].map((idx) => (
               <div
@@ -136,7 +153,7 @@ export function TurnZeroSetup({ onSessionCreated }: TurnZeroSetupProps) {
       {isError ? (
         <section
           role="alert"
-          className="mt-8 rounded-[var(--vellum-radius-md)] border border-[var(--vellum-danger)]/40 bg-[var(--vellum-danger-soft)] px-5 py-4 text-[var(--vellum-ink)]"
+          className="mt-6 rounded-[var(--vellum-radius-md)] border border-[var(--vellum-danger)]/40 bg-[var(--vellum-danger-soft)] px-5 py-4 text-[var(--vellum-ink)]"
         >
           <div className="flex items-start gap-3">
             <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-[var(--vellum-danger)]" />
@@ -163,12 +180,14 @@ export function TurnZeroSetup({ onSessionCreated }: TurnZeroSetupProps) {
 
       {!isLoading && !isError && investigators.length > 0 ? (
         <>
-          <section className="mt-8" aria-labelledby="investigator-heading">
+          <section className="mt-7" aria-labelledby="investigator-heading">
             <div className="flex items-baseline justify-between gap-2">
-              <h2 id="investigator-heading" className="text-sm font-semibold text-[var(--vellum-ink)]">
+              <h2 id="investigator-heading" className="text-sm font-bold text-[var(--vellum-ink)]">
                 选择调查员身份
               </h2>
-              <span className="text-xs text-[var(--vellum-muted)]">共 {investigators.length} 位预制角色</span>
+              <span className="text-xs text-[var(--vellum-muted)]">
+                共 {investigators.length} 张可扮演角色卡
+              </span>
             </div>
 
             <div className="mt-3 grid gap-4 lg:grid-cols-3">
@@ -178,22 +197,31 @@ export function TurnZeroSetup({ onSessionCreated }: TurnZeroSetupProps) {
                   <article
                     key={inv.investigatorId}
                     onClick={() => setSelectedId(inv.investigatorId)}
-                    className={`flex cursor-pointer flex-col justify-between rounded-[var(--vellum-radius-md)] border p-5 transition-colors ${
+                    className={`flex cursor-pointer flex-col justify-between rounded-[var(--vellum-radius-lg)] border p-5 transition-all ${
                       selected
-                        ? "border-[var(--vellum-accent)] bg-[var(--vellum-surface)] shadow-[var(--vellum-shadow-md)]"
-                        : "border-[var(--vellum-border)] bg-[var(--vellum-surface)]/85 hover:border-[var(--vellum-border-strong)]"
+                        ? "border-[var(--vellum-accent)] bg-[var(--vellum-surface)] ring-1 ring-[var(--vellum-accent)]/60 shadow-[var(--vellum-shadow-md)]"
+                        : "border-[var(--vellum-wood-border)]/70 bg-[var(--vellum-surface)]/85 hover:border-[var(--vellum-brass)]"
                     }`}
                   >
                     <div>
                       <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <h3 className="vellum-prose text-lg font-semibold text-[var(--vellum-ink)]">
-                            {inv.name}
-                          </h3>
-                          <p className="mt-0.5 inline-flex items-center gap-1.5 text-xs font-medium text-[var(--vellum-muted)]">
-                            <Briefcase className="h-3.5 w-3.5 text-[var(--vellum-accent)]" />
-                            <span>{inv.occupation}</span>
-                          </p>
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="vellum-prose flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 border-[var(--vellum-brass)] text-base font-bold text-[#fff8eb] shadow-xs"
+                            style={{ backgroundColor: investigatorTone(inv.investigatorId) }}
+                            aria-hidden="true"
+                          >
+                            {inv.name.slice(0, 1)}
+                          </div>
+                          <div>
+                            <h3 className="vellum-prose text-lg font-bold text-[var(--vellum-ink)]">
+                              {inv.name}
+                            </h3>
+                            <p className="mt-0.5 inline-flex items-center gap-1.5 text-xs font-medium text-[var(--vellum-brass)]">
+                              <Briefcase className="h-3.5 w-3.5" />
+                              <span>{inv.occupation}</span>
+                            </p>
+                          </div>
                         </div>
                         <button
                           type="button"
@@ -202,7 +230,7 @@ export function TurnZeroSetup({ onSessionCreated }: TurnZeroSetupProps) {
                             e.stopPropagation();
                             setSelectedId(inv.investigatorId);
                           }}
-                          className={`rounded-[var(--vellum-radius-sm)] px-2.5 py-1 text-xs font-medium ${
+                          className={`rounded-[var(--vellum-radius-sm)] px-2.5 py-1 text-xs font-semibold ${
                             selected
                               ? "bg-[var(--vellum-accent)] text-[var(--vellum-accent-ink)]"
                               : "border border-[var(--vellum-border)] bg-[var(--vellum-elevated)] text-[var(--vellum-muted)] hover:text-[var(--vellum-ink)]"
@@ -212,11 +240,11 @@ export function TurnZeroSetup({ onSessionCreated }: TurnZeroSetupProps) {
                         </button>
                       </div>
 
-                      <p className="mt-3 border-l-2 border-[var(--vellum-accent)]/60 pl-3 text-xs font-medium leading-6 text-[var(--vellum-ink)]">
+                      <p className="mt-3 border-l-2 border-[var(--vellum-accent)]/70 pl-3 text-xs font-medium leading-6 text-[var(--vellum-ink)]">
                         {inv.tagline}
                       </p>
 
-                      <p className="mt-3 text-xs leading-6 text-[var(--vellum-muted)]">{inv.biography}</p>
+                      <p className="mt-2.5 text-xs leading-6 text-[var(--vellum-muted)]">{inv.biography}</p>
 
                       <dl className="mt-3 space-y-2 border-t border-[var(--vellum-border)] pt-3 text-xs">
                         <div>
@@ -279,7 +307,7 @@ export function TurnZeroSetup({ onSessionCreated }: TurnZeroSetupProps) {
                               className="inline-flex items-center gap-1 rounded-[var(--vellum-radius-sm)] border border-[var(--vellum-border)] bg-[var(--vellum-elevated)] px-2 py-0.5 text-[11px] text-[var(--vellum-ink)]"
                             >
                               <span>{s.label}</span>
-                              <span className="vellum-mono font-semibold text-[var(--vellum-accent)]">
+                              <span className="vellum-mono font-semibold text-[var(--vellum-brass)]">
                                 {s.rating}%
                               </span>
                             </span>
@@ -290,7 +318,7 @@ export function TurnZeroSetup({ onSessionCreated }: TurnZeroSetupProps) {
 
                     <div className="mt-4 border-t border-[var(--vellum-border)] pt-3">
                       <div className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--vellum-ink)]">
-                        <Compass className="h-3.5 w-3.5 text-[var(--vellum-accent)]" />
+                        <Compass className="h-3.5 w-3.5 text-[var(--vellum-brass)]" />
                         <span>随身物品</span>
                       </div>
                       <ul className="mt-1.5 space-y-1 text-xs text-[var(--vellum-muted)]">
@@ -308,12 +336,12 @@ export function TurnZeroSetup({ onSessionCreated }: TurnZeroSetupProps) {
             </div>
           </section>
 
-          <section className="mt-8" aria-labelledby="experience-mode-heading">
-            <h2 id="experience-mode-heading" className="text-sm font-semibold text-[var(--vellum-ink)]">
-              选择阅读与交互模式
+          <section className="mt-7" aria-labelledby="experience-mode-heading">
+            <h2 id="experience-mode-heading" className="text-sm font-bold text-[var(--vellum-ink)]">
+              选择跑团交互模式
             </h2>
             <p className="mt-1 text-xs text-[var(--vellum-muted)]">
-              仅调整界面提示多寡，不改变案件真相与检定规则，进入后随时可在顶部切换。
+              仅调整快捷回应与提示显示，不改变案件真相与检定规则，入桌后可随时在顶部切换。
             </p>
 
             <div className="mt-3 grid gap-3 sm:grid-cols-3" role="radiogroup" aria-label="体验模式选择">
@@ -328,14 +356,14 @@ export function TurnZeroSetup({ onSessionCreated }: TurnZeroSetupProps) {
                     onClick={() => setExperienceMode(mode.value)}
                     className={`rounded-[var(--vellum-radius-md)] border p-4 text-left transition-colors ${
                       active
-                        ? "border-[var(--vellum-accent)] bg-[var(--vellum-accent-soft)]/50"
-                        : "border-[var(--vellum-border)] bg-[var(--vellum-surface)] hover:border-[var(--vellum-border-strong)]"
+                        ? "border-[var(--vellum-accent)] bg-[var(--vellum-accent-soft)]"
+                        : "border-[var(--vellum-border)] bg-[var(--vellum-surface)] hover:border-[var(--vellum-brass)]"
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm font-semibold text-[var(--vellum-ink)]">{mode.label}</span>
                       {mode.badge ? (
-                        <span className="rounded border border-[var(--vellum-border-strong)] bg-[var(--vellum-surface)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--vellum-muted)]">
+                        <span className="rounded border border-[var(--vellum-brass)]/60 bg-[var(--vellum-surface)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--vellum-brass)]">
                           {mode.badge}
                         </span>
                       ) : null}
@@ -358,17 +386,17 @@ export function TurnZeroSetup({ onSessionCreated }: TurnZeroSetupProps) {
             </div>
           ) : null}
 
-          <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-[var(--vellum-border)] pt-6">
+          <div className="mt-7 flex flex-wrap items-center justify-between gap-4 border-t border-[var(--vellum-wood-border)]/70 pt-6">
             <p className="text-xs text-[var(--vellum-muted)]">
-              选定角色后将立即开启雨夜序幕，并为你送达初始委托信件。
+              入桌后守秘人将为你实时主持开篇序幕，老管家 Arthur 已提灯候在门厅。
             </p>
             <button
               type="button"
               disabled={!activeInvestigatorId || submitting}
               onClick={() => void handleStartAdventure()}
-              className="inline-flex items-center gap-2 rounded-[var(--vellum-radius-sm)] bg-[var(--vellum-accent)] px-5 py-2.5 text-sm font-semibold text-[var(--vellum-accent-ink)] shadow-[var(--vellum-shadow-sm)] transition-colors hover:bg-[var(--vellum-accent-hover)] disabled:opacity-55"
+              className="inline-flex items-center gap-2 rounded-[var(--vellum-radius-md)] bg-[var(--vellum-accent)] px-6 py-2.5 text-sm font-bold text-[var(--vellum-accent-ink)] shadow-[var(--vellum-shadow-md)] transition-colors hover:bg-[var(--vellum-accent-hover)] disabled:opacity-55"
             >
-              <span>{submitting ? "正在推开庄园铁门…" : "踏入绯雨庄园"}</span>
+              <span>{submitting ? "正在推开庄园铁门…" : "落座开团 · 踏入绯雨庄园"}</span>
               <ArrowRight className="h-4 w-4" />
             </button>
           </div>

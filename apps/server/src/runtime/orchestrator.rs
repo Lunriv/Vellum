@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use chrono::Utc;
 use serde_json::{json, Value};
@@ -7,11 +7,13 @@ use uuid::Uuid;
 use crate::kernel::{
     apply_event, clocks::current_stage_label, improvisation::validate_patch, skill_display_label,
     ActionContext, ClockThreshold, ClockVisibility, ClueState, GameEventKind, HandoutState,
-    InventoryItem, InvestigatorState, PendingInterrupt, ProgressClock, RollAttempt, SceneState,
-    SessionState, TurnStatus,
+    InventoryItem, InvestigatorState, PendingInterrupt, ProgressClock, RollAttempt,
+    RollResultLevel, SceneState, SessionState, TurnStatus,
 };
+use crate::models::{NarrationContext, TurnHistoryItem};
 use crate::modules::{evaluate_module_predicate, ModuleIr, SceneDefinition};
 use crate::persistence::{
+    db::Database,
     event_repo::{self, DirectiveDto, TranscriptRecord},
     session_repo, turn_repo,
 };
@@ -184,6 +186,45 @@ pub fn visible_clocks_dto(state: &SessionState) -> Vec<Value> {
         .collect()
 }
 
+/// Loads the most recent completed turns for multi-turn Keeper conversational memory.
+pub async fn load_recent_history(
+    db: &Database,
+    session_id: &str,
+    limit: usize,
+) -> Vec<TurnHistoryItem> {
+    if limit == 0 {
+        return Vec::new();
+    }
+    let Ok(turns) = turn_repo::list_for_session(db, session_id).await else {
+        return Vec::new();
+    };
+    let Ok(transcripts) = event_repo::list_transcripts(db, session_id).await else {
+        return Vec::new();
+    };
+    let mut narration_by_turn: HashMap<String, String> = HashMap::new();
+    for tr in transcripts {
+        if tr.claim_kind == "narration" {
+            narration_by_turn.insert(tr.turn_id, tr.content);
+        }
+    }
+    let mut items: Vec<TurnHistoryItem> = turns
+        .into_iter()
+        .filter(|t| matches!(t.status, TurnStatus::Completed))
+        .filter_map(|t| {
+            narration_by_turn
+                .remove(&t.id)
+                .map(|narration| TurnHistoryItem {
+                    player_input: t.player_input,
+                    narration,
+                })
+        })
+        .collect();
+    if items.len() > limit {
+        items = items.split_off(items.len() - limit);
+    }
+    items
+}
+
 pub fn visible_scene_dto(state: &SessionState, module: Option<&ModuleIr>) -> Value {
     let def: Option<&SceneDefinition> =
         module.and_then(|m| m.find_scene(&state.current_scene.scene_id));
@@ -228,6 +269,7 @@ pub fn visible_scene_dto(state: &SessionState, module: Option<&ModuleIr>) -> Val
         .unwrap_or_default();
 
     let tags = def.map(|s| s.tags.clone()).unwrap_or_default();
+    let visited_scene_ids: Vec<String> = state.current_scene.visited.iter().cloned().collect();
 
     json!({
         "sceneId": state.current_scene.scene_id,
@@ -235,9 +277,76 @@ pub fn visible_scene_dto(state: &SessionState, module: Option<&ModuleIr>) -> Val
         "atmosphere": state.current_scene.atmosphere,
         "description": state.current_scene.description,
         "tags": tags,
+        "visitedSceneIds": visited_scene_ids,
         "exits": exits,
         "presentEntities": present_entities,
     })
+}
+
+/// Projects the architectural room blueprint for the tabletop Manor Battlefield Map.
+/// Strictly player-safe: unvisited rooms stay fogged (empty entities) and NEVER expose clues or hidden clocks.
+pub fn map_rooms_dto(state: &SessionState, module: Option<&ModuleIr>) -> Vec<Value> {
+    let Some(m) = module else {
+        return Vec::new();
+    };
+    let current_id = state.current_scene.scene_id.as_str();
+    let current_exits: HashMap<&str, (&str, bool)> = m
+        .find_scene(current_id)
+        .map(|scene| {
+            scene
+                .exits
+                .iter()
+                .map(|exit| {
+                    let accessible = exit
+                        .condition
+                        .as_ref()
+                        .map(|cond| evaluate_module_predicate(cond, state, None))
+                        .unwrap_or(true);
+                    (
+                        exit.target_scene_id.as_str(),
+                        (exit.label.as_str(), accessible),
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    m.scenes
+        .iter()
+        .map(|scene| {
+            let is_current = scene.scene_id == current_id;
+            let visited = is_current || state.current_scene.visited.contains(&scene.scene_id);
+            let (exit_label, accessible_from_current) = current_exits
+                .get(scene.scene_id.as_str())
+                .map(|(label, ok)| (Some(*label), *ok))
+                .unwrap_or((None, false));
+            let known_npcs: Vec<Value> = if visited {
+                scene
+                    .entities
+                    .iter()
+                    .filter(|e| e.kind == "npc")
+                    .map(|e| {
+                        json!({
+                            "entityId": e.entity_id,
+                            "name": e.name,
+                        })
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            json!({
+                "sceneId": scene.scene_id,
+                "title": scene.title,
+                "atmosphere": scene.atmosphere,
+                "visited": visited,
+                "isCurrent": is_current,
+                "accessibleFromCurrent": accessible_from_current,
+                "exitLabelFromCurrent": exit_label,
+                "knownNpcs": known_npcs,
+            })
+        })
+        .collect()
 }
 
 pub fn guided_prompts_for_scene(scene_id: &str) -> Vec<String> {
@@ -281,6 +390,7 @@ pub fn build_client_state_patch(
         "sessionStatus": session_status,
         "investigator": state.investigator,
         "currentScene": visible_scene_dto(state, module),
+        "mapRooms": map_rooms_dto(state, module),
         "visibleClocks": visible_clocks_dto(state),
         "addedClues": state.clues.values().cloned().collect::<Vec<_>>(),
         "addedHandouts": state.handouts.values().cloned().collect::<Vec<_>>(),
@@ -480,15 +590,48 @@ pub async fn run_turn0(state: AppState, session_id: String, turn0_id: String) {
             .await;
     }
 
-    let opening = format!(
-        "{}\n\n你以{}「{}」的身份站在{}。老管家 Arthur 提着一盏黄铜提灯迎上前来，神色克制而警惕。",
+    let preset_hook = module
+        .find_investigator(&session_state.investigator.investigator_id)
+        .map(|p| {
+            format!(
+                "角色背景：{}；动机：{}；与庄园渊源：{}",
+                p.biography, p.motivation, p.manor_connection
+            )
+        })
+        .unwrap_or_default();
+    let opening_outcome = format!(
+        "开场序幕：{}\n调查员身份：{}「{}」（{}）\n已随身获得线索「无署名委托函」与实体证物，要求查清三年前庄园访客失踪案并留意酒窖。\n老管家 Arthur 正提着黄铜提灯守在壁炉旁迎上前来。",
+        module.opening_prologue.trim(),
+        session_state.investigator.occupation,
+        session_state.investigator.name,
+        preset_hook,
+    );
+    let opening_ctx = NarrationContext {
+        history: &[],
+        outcome_summary: Some(&opening_outcome),
+        is_opening: true,
+    };
+
+    let fallback_opening = format!(
+        "【守秘人】{}\n\n你以{}「{}」的身份站在{}。老管家 Arthur 提着一盏黄铜提灯迎上前来，微弱灯影映出他克制而警惕的神色。\n\n【老管家 Arthur】「外头暴雨封山，女主人今夜身体不适。阁下既持函而来，不妨先在门厅歇脚——只是酒窖那边湿滑失修，还请莫要独自走近。」\n\n【直觉·侦查】他的礼数无可挑剔，可提灯微晃时，你瞥见他袖口边缘沾着一点尚未干透的深色蜡油。\n\n【抉择】老管家正等着你表明来意，书房与女仆偏厅的廊灯就在前方——你第一步打算怎么做？\n\n【建议行动】\n1. [心理学] 盯住 Arthur 的袖口与神情，直接追问三年前失踪访客的下落\n2. [侦查] 借口欣赏油画，凑近检查壁炉旁的家族肖像\n3. 暂不打草惊蛇，礼貌颔首后转身前往书房",
         module.opening_prologue.trim(),
         session_state.investigator.occupation,
         session_state.investigator.name,
         session_state.current_scene.title
     );
 
-    for chunk in chunk_text(&opening) {
+    let chunks = match state
+        .provider
+        .stream_narration("开场序幕", &session_state, &opening_ctx)
+        .await
+    {
+        Ok(c) if !c.is_empty() => c,
+        _ => chunk_text(&fallback_opening),
+    };
+
+    let mut opening = String::new();
+    for chunk in chunks {
+        opening.push_str(&chunk);
         buffer.append_narration(&chunk).await;
         buffer
             .push(
@@ -572,6 +715,8 @@ pub async fn run_player_turn(state: AppState, session_id: String, turn_id: Strin
     };
     let module = state.modules.get(&session_state.module_id).cloned();
 
+    let history = load_recent_history(&state.db, &session_id, 6).await;
+
     // Lightweight route: pure low-risk observation -> Path A fast track (read-only, zero authoritative state mutations!)
     let is_path_a = is_low_risk_path_a(&input);
     if is_path_a {
@@ -579,9 +724,14 @@ pub async fn run_player_turn(state: AppState, session_id: String, turn_id: Strin
         let _ = turn_repo::set_status(&state.db, &turn_id, TurnStatus::Narrating).await;
         buffer.set_status("narrating").await;
 
+        let path_a_ctx = NarrationContext {
+            history: &history,
+            outcome_summary: Some("纯环境观察回合：未发生房间移动、掷骰或状态变更，请给出细腻现场感、在场人物反应与下一步抉择。"),
+            is_opening: false,
+        };
         let chunks = match state
             .provider
-            .stream_narration(&input, &session_state)
+            .stream_narration(&input, &session_state, &path_a_ctx)
             .await
         {
             Ok(c) => c,
@@ -644,7 +794,11 @@ pub async fn run_player_turn(state: AppState, session_id: String, turn_id: Strin
     let _ = turn_repo::set_status(&state.db, &turn_id, TurnStatus::ProposalPending).await;
     buffer.set_status("proposal_pending").await;
 
-    let proposal = match state.provider.propose_action(&input, &session_state).await {
+    let proposal = match state
+        .provider
+        .propose_action(&input, &session_state, &history)
+        .await
+    {
         Ok(p) => p,
         Err(err) => {
             emit_turn_error(
@@ -848,11 +1002,13 @@ pub async fn run_player_turn(state: AppState, session_id: String, turn_id: Strin
     }
 
     // Apply proposed effects through deterministic checks
+    let mut outcome_notes: Vec<String> = Vec::new();
     for eff in &proposal.proposed_effects {
         match eff.effect_type.as_str() {
             "move_scene" => {
                 if let (Some(target_id), Some(m)) = (eff.target_id.as_deref(), module.as_ref()) {
                     if let Some(scene_def) = m.find_scene(target_id) {
+                        let prev_title = session_state.current_scene.title.clone();
                         let new_scene = SceneState {
                             scene_id: scene_def.scene_id.clone(),
                             title: scene_def.title.clone(),
@@ -868,6 +1024,10 @@ pub async fn run_player_turn(state: AppState, session_id: String, turn_id: Strin
                         let ev_id = Uuid::new_v4().to_string();
                         let ev = GameEventKind::SceneChanged { scene: new_scene };
                         apply_event(&mut session_state, &ev);
+                        outcome_notes.push(format!(
+                            "场景移动：从「{}」来到「{}」（{}）",
+                            prev_title, scene_def.title, scene_def.description
+                        ));
                         let _ = event_repo::append(
                             &state.db,
                             &ev_id,
@@ -934,6 +1094,10 @@ pub async fn run_player_turn(state: AppState, session_id: String, turn_id: Strin
                         claim: input.clone(),
                     };
                     apply_event(&mut session_state, &ev);
+                    outcome_notes.push(
+                        "诈唬试探：玩家抛出了未经证实的说辞，在场人物神色动摇并产生怀疑，但尚未彻底崩盘。"
+                            .into(),
+                    );
                     let _ = event_repo::append(
                         &state.db,
                         &ev_id,
@@ -951,7 +1115,7 @@ pub async fn run_player_turn(state: AppState, session_id: String, turn_id: Strin
             }
             "unlock_clue" => {
                 if let (Some(clue_id), Some(m)) = (eff.target_id.as_deref(), module.as_ref()) {
-                    unlock_clue_and_handout(
+                    if let Some(note) = unlock_clue_and_handout(
                         &state,
                         &session_id,
                         &turn_id,
@@ -963,7 +1127,10 @@ pub async fn run_player_turn(state: AppState, session_id: String, turn_id: Strin
                         &mut ref_event_ids,
                         &mut directives_to_emit,
                     )
-                    .await;
+                    .await
+                    {
+                        outcome_notes.push(note);
+                    }
                 }
             }
             "record_event" => {
@@ -973,6 +1140,7 @@ pub async fn run_player_turn(state: AppState, session_id: String, turn_id: Strin
                         event_id: ev_name.to_string(),
                     };
                     apply_event(&mut session_state, &ev);
+                    outcome_notes.push(format!("世界变化已生效：{ev_name}"));
                     let _ = event_repo::append(
                         &state.db,
                         &ev_id,
@@ -1012,10 +1180,22 @@ pub async fn run_player_turn(state: AppState, session_id: String, turn_id: Strin
                         &mut directives_to_emit,
                     )
                     .await;
+                    // Strictly only narrate PlayerVisible clocks! Never expose KeeperHidden clocks.
+                    if let Some(clk) = session_state
+                        .clocks
+                        .get(clock_id)
+                        .filter(|c| c.visibility == ClockVisibility::PlayerVisible)
+                    {
+                        outcome_notes.push(format!(
+                            "可见危机时钟「{}」推进至 {}/{}（{}）",
+                            clk.name, clk.current, clk.max, reason
+                        ));
+                    }
                 }
             }
             "end_session" => {
                 session_ended = true;
+                outcome_notes.push("本局调查已正式进入结案收尾阶段。".into());
                 let ev_id = Uuid::new_v4().to_string();
                 let ev = GameEventKind::SessionEnded;
                 apply_event(&mut session_state, &ev);
@@ -1054,8 +1234,10 @@ pub async fn run_player_turn(state: AppState, session_id: String, turn_id: Strin
                         &session_state,
                         Some(&action_ctx),
                     ) {
-                        extra_narration_notes
-                            .push(format!("{}低声吐露：「{}」", npc.name, stage.truth));
+                        extra_narration_notes.push(format!(
+                            "{}在压力下松口低声吐露：「{}」",
+                            npc.name, stage.truth
+                        ));
                         for fid in &stage.releasable_fact_ids {
                             let key = format!("player:{fid}");
                             if !session_state.npc_known_facts.contains(&key) {
@@ -1110,7 +1292,7 @@ pub async fn run_player_turn(state: AppState, session_id: String, turn_id: Strin
             .map(|c| c.clue_id.clone())
             .collect();
         for cid in conclusion_ids {
-            unlock_clue_and_handout(
+            if let Some(note) = unlock_clue_and_handout(
                 &state,
                 &session_id,
                 &turn_id,
@@ -1122,9 +1304,13 @@ pub async fn run_player_turn(state: AppState, session_id: String, turn_id: Strin
                 &mut ref_event_ids,
                 &mut directives_to_emit,
             )
-            .await;
+            .await
+            {
+                outcome_notes.push(note);
+            }
         }
     }
+    outcome_notes.extend(extra_narration_notes);
 
     // Commit authoritative state BEFORE narration stream
     let new_session_status = if session_ended { "ended" } else { "active" };
@@ -1152,9 +1338,19 @@ pub async fn run_player_turn(state: AppState, session_id: String, turn_id: Strin
     }
 
     // Stream narration AFTER state commit
-    let mut chunks = match state
+    let outcome_joined = outcome_notes.join("\n");
+    let narration_ctx = NarrationContext {
+        history: &history,
+        outcome_summary: if outcome_joined.is_empty() {
+            None
+        } else {
+            Some(outcome_joined.as_str())
+        },
+        is_opening: false,
+    };
+    let chunks = match state
         .provider
-        .stream_narration(&input, &session_state)
+        .stream_narration(&input, &session_state, &narration_ctx)
         .await
     {
         Ok(c) => c,
@@ -1171,10 +1367,6 @@ pub async fn run_player_turn(state: AppState, session_id: String, turn_id: Strin
             return;
         }
     };
-    for note in extra_narration_notes {
-        chunks.push("\n\n".into());
-        chunks.push(note);
-    }
 
     let mut full_text = String::new();
     for chunk in chunks {
@@ -1343,6 +1535,7 @@ pub async fn complete_resolved_check_turn(
     }
 
     // Apply outcome effects
+    let mut roll_notes: Vec<String> = Vec::new();
     if final_roll.passed {
         if let Some(m) = module.as_ref() {
             let clue_to_unlock = match final_roll.skill.as_str() {
@@ -1364,7 +1557,7 @@ pub async fn complete_resolved_check_turn(
                 _ => None,
             };
             if let Some(cid) = clue_to_unlock {
-                unlock_clue_and_handout(
+                if let Some(note) = unlock_clue_and_handout(
                     &state,
                     &session_id,
                     &turn_id,
@@ -1376,7 +1569,10 @@ pub async fn complete_resolved_check_turn(
                     &mut ref_event_ids,
                     &mut directives_to_emit,
                 )
-                .await;
+                .await
+                {
+                    roll_notes.push(note);
+                }
             }
         }
     } else {
@@ -1401,6 +1597,12 @@ pub async fn complete_resolved_check_turn(
             &mut directives_to_emit,
         )
         .await;
+        if let Some(clk) = session_state.clocks.get("manor_anomaly") {
+            roll_notes.push(format!(
+                "可见危机时钟「{}」推进至 {}/{}（{}）",
+                clk.name, clk.current, clk.max, reason
+            ));
+        }
         advance_clock_and_maybe_emit(
             &state,
             &session_id,
@@ -1418,6 +1620,7 @@ pub async fn complete_resolved_check_turn(
 
         if was_pushed {
             session_state.investigator.san = (session_state.investigator.san - 1).max(0);
+            roll_notes.push("孤注一掷二次失败带来精神冲击，调查员理智 -1。".into());
             let ev_id = Uuid::new_v4().to_string();
             let ev = GameEventKind::ResourceChanged {
                 resource: "san".into(),
@@ -1483,36 +1686,84 @@ pub async fn complete_resolved_check_turn(
         .skill_label
         .as_deref()
         .unwrap_or_else(|| skill_display_label(&final_roll.skill));
-    let prose = if final_roll.passed {
+    let result_cn = match final_roll.result_level {
+        RollResultLevel::CriticalSuccess => "大成功",
+        RollResultLevel::ExtremeSuccess => "极难成功",
+        RollResultLevel::HardSuccess => "困难成功",
+        RollResultLevel::RegularSuccess => "常规成功",
+        RollResultLevel::Failure => "失败",
+        RollResultLevel::Fumble => "大失败",
+    };
+    let turn_input = turn_repo::get(&state.db, &turn_id)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|t| t.player_input)
+        .unwrap_or_else(|| format!("执行{}检定", skill_cn));
+    let history = load_recent_history(&state.db, &session_id, 6).await;
+
+    let mut summary_lines = vec![format!(
+        "检定已由确定性内核裁定：{}检定掷出 d100 = {}（目标值 {}，结果：{}）",
+        skill_cn, final_roll.roll_value, final_roll.target_number, result_cn
+    )];
+    if let Some(cost) = luck_spent {
+        summary_lines.push(format!("玩家消耗 {} 点幸运惊险改判为成功。", cost));
+    } else if was_pushed {
+        summary_lines.push(if final_roll.passed {
+            "玩家顶着升级风险孤注一掷，二次掷骰成功破局。".into()
+        } else {
+            "玩家孤注一掷二次掷骰仍宣告失手，局势急转直下。".into()
+        });
+    }
+    summary_lines.extend(roll_notes);
+    let outcome_summary = summary_lines.join("\n");
+
+    let fallback_prose = if final_roll.passed {
         if let Some(cost) = luck_spent {
             format!(
-                "千钧一发之际，你凭直觉（消耗 {} 点幸运）稳住了手脚。{}检定顺利通过，关键破绽终于落入你的眼中。",
+                "【守秘人】千钧一发之际，你凭直觉（消耗 {} 点幸运）稳住了手脚。{}检定惊险通过，关键破绽终于落入你的眼中。\n\n【抉择】趁着眼前局势刚刚松动，你要如何顺势追击？\n\n【建议行动】\n1. 顺着刚发现的破绽继续追问细节\n2. 检查周围是否还有可相互印证的物证\n3. 暂作记录，转往相邻房间扩大排查",
                 cost, skill_cn
             )
         } else if was_pushed {
             format!(
-                "顶着升级的风险孤注一掷（掷出 {}），你的{}尝试终于奏效，撬开了此前紧闭的突破口。",
+                "【守秘人】顶着升级的风险孤注一掷（掷出 {}），你的{}尝试终于奏效，撬开了此前紧闭的突破口。\n\n【抉择】突破口已经敞开，下一步你打算怎么利用这份收获？\n\n【建议行动】\n1. 趁热打铁继续深挖眼前的线索\n2. 带着刚到手的发现向在场人物当面求证\n3. 立刻转移至下一个关键房间",
                 final_roll.roll_value, skill_cn
             )
         } else {
             format!(
-                "你的{}检定干脆利落（掷出 {} / 目标 {}），在烛影晃动间捕捉到了决定性的线索。",
-                skill_cn, final_roll.roll_value, final_roll.target_number
+                "【守秘人】你的{}检定干脆利落（掷出 {} / 目标 {}，{}），在烛影晃动间捕捉到了决定性的线索。\n\n【抉择】真相的拼图多了一块，接下来你想从哪一步切入？\n\n【建议行动】\n1. 顺着刚捕捉到的细节继续追问\n2. 细查房间内其余可疑物件\n3. 带着线索前往其他房间交叉印证",
+                skill_cn, final_roll.roll_value, final_roll.target_number, result_cn
             )
         }
     } else if was_pushed {
         format!(
-            "孤注一掷终判失手（掷出 {}）。工具发出的脆响在雨夜长廊里回荡，烛火猛然一暗，庄园深处传来一声低沉的钟鸣。",
+            "【守秘人】孤注一掷终判失手（掷出 {}）。工具发出的脆响在雨夜长廊里回荡，烛火猛然一暗，庄园深处传来一声低沉的钟鸣。\n\n【抉择】骚动已经惊动了庄园深处，你是咬牙留在原地还是立刻换一条路？\n\n【建议行动】\n1. 稳住心神，试着从另一处线索绕行\n2. 离开当前房间，避免正面暴露\n3. 先向在场人物试探刚才的钟声",
             final_roll.roll_value
         )
     } else {
         format!(
-            "这次{}尝试未能如愿（掷出 {}），但你在受挫的同时察觉到走廊温度骤降——时间并不站在你这边，或许还有其他绕行之法。",
+            "【守秘人】这次{}尝试未能如愿（掷出 {}），你在受挫的同时察觉到走廊温度骤降——时间并不站在你这边，或许还有其他绕行之法。\n\n【抉择】正面试探受挫，你要换个切入点还是去别的房间找突破口？\n\n【建议行动】\n1. 观察房间内是否有可替代的明面线索\n2. 换一种温和或迂回的方式继续交涉\n3. 先前往相邻房间寻找新的工具或证词",
             skill_cn, final_roll.roll_value
         )
     };
 
-    for chunk in chunk_text(&prose) {
+    let roll_ctx = NarrationContext {
+        history: &history,
+        outcome_summary: Some(&outcome_summary),
+        is_opening: false,
+    };
+    let chunks = match state
+        .provider
+        .stream_narration(&turn_input, &session_state, &roll_ctx)
+        .await
+    {
+        Ok(c) if !c.is_empty() => c,
+        _ => chunk_text(&fallback_prose),
+    };
+
+    let mut prose = String::new();
+    for chunk in chunks {
+        prose.push_str(&chunk);
         buffer.append_narration(&chunk).await;
         buffer
             .push(
@@ -1571,13 +1822,11 @@ async fn unlock_clue_and_handout(
     directive_seq: &mut i64,
     ref_event_ids: &mut Vec<String>,
     directives_to_emit: &mut Vec<DirectiveDto>,
-) {
+) -> Option<String> {
     if session_state.clues.contains_key(clue_id) {
-        return;
+        return None;
     }
-    let Some(clue_def) = module.find_clue(clue_id) else {
-        return;
-    };
+    let clue_def = module.find_clue(clue_id)?;
     let clue = ClueState {
         clue_id: clue_def.clue_id.clone(),
         title: clue_def.title.clone(),
@@ -1586,6 +1835,7 @@ async fn unlock_clue_and_handout(
         discovered_at_turn_id: turn_id.to_string(),
         is_conclusion: clue_def.is_conclusion,
     };
+    let clue_note = format!("新解锁线索「{}」：{}", clue.title, clue.summary);
     let ev_id = Uuid::new_v4().to_string();
     let ev = GameEventKind::ClueUnlocked { clue: clue.clone() };
     apply_event(session_state, &ev);
@@ -1687,6 +1937,7 @@ async fn unlock_clue_and_handout(
             }
         }
     }
+    Some(clue_note)
 }
 
 #[allow(clippy::too_many_arguments)]

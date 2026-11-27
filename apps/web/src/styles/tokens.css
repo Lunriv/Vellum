@@ -1,91 +1,138 @@
 /*
- * Vellum Design Tokens
- * Light Theme = Direction A (纸墨档案室 · Vellum Editorial)
- * Dark Theme  = Direction B (雨夜侦探稿 · Noir Casefile)
+ * Vellum A+B Fusion Design Tokens
+ * Dark Theme (Default) = Walnut & Felt Tabletop + Disco Elysium Nocturne
+ * Light Theme          = Daylight Parchment & Oak Tabletop (still tactile TRPG, never sterile doc)
  */
 
 :root,
 [data-theme="light"] {
   color-scheme: light;
 
-  --vellum-bg: #f6f2e9;
-  --vellum-surface: #fbf8f1;
-  --vellum-elevated: #efe9dc;
-  --vellum-ink: #1f1b17;
-  --vellum-muted: #655c52;
-  --vellum-border: #d9cfc0;
-  --vellum-border-strong: #bfb19c;
+  --vellum-bg: #eee4d0;
+  --vellum-surface: #f7f0e1;
+  --vellum-elevated: #e5d8be;
+  --vellum-wood: #d7c09c;
+  --vellum-wood-deep: #bfa278;
+  --vellum-wood-border: #9f8159;
+
+  --vellum-ink: #1f1913;
+  --vellum-muted: #5d5143;
+  --vellum-border: #cfbda0;
+  --vellum-border-strong: #ad9570;
 
   --vellum-accent: #8f2424;
-  --vellum-accent-hover: #751c1c;
-  --vellum-accent-soft: #f3e3e1;
-  --vellum-accent-ink: #fdf9f4;
+  --vellum-accent-hover: #731a1a;
+  --vellum-accent-soft: rgba(143, 36, 36, 0.12);
+  --vellum-accent-ink: #fdf8ee;
+  --vellum-brass: #b6832f;
+  --vellum-brass-soft: rgba(182, 131, 47, 0.14);
 
-  --vellum-success: #2a5f42;
-  --vellum-success-soft: #e3efe7;
-  --vellum-warning: #8f5b14;
-  --vellum-warning-soft: #f5ebd9;
+  --vellum-success: #245c3e;
+  --vellum-success-soft: #dfede3;
+  --vellum-warning: #8f5710;
+  --vellum-warning-soft: #f5e8cf;
   --vellum-danger: #8f2424;
-  --vellum-danger-soft: #f5e2e2;
+  --vellum-danger-soft: #f4dfdd;
 
-  /* Physical diegetic artifacts stay crisp paper-and-ink */
-  --vellum-handout-bg: #fffdf7;
-  --vellum-handout-border: #c9bba5;
-  --vellum-handout-ink: #262018;
-  --vellum-handout-muted: #6b5d4d;
+  /* Physical diegetic artifacts & Manor Blueprint */
+  --vellum-handout-bg: #fffcf4;
+  --vellum-handout-border: #c5b190;
+  --vellum-handout-ink: #241d15;
+  --vellum-handout-muted: #655644;
 
-  /* Inline dice tray contrasts cleanly with the narrative stage */
-  --vellum-dice-bg: #26211c;
-  --vellum-dice-border: #3d352d;
-  --vellum-dice-ink: #f7f2e7;
-  --vellum-dice-muted: #c2b7a6;
+  --vellum-parchment: #f3e6cc;
+  --vellum-parchment-deep: #e6d3b0;
+  --vellum-parchment-ink: #2c2014;
+  --vellum-parchment-line: #8c714c;
 
-  --vellum-shadow-sm: 0 1px 2px rgba(31, 27, 23, 0.06);
-  --vellum-shadow-md: 0 4px 14px rgba(31, 27, 23, 0.08);
+  /* Hunter-green felt dice tray stays tactile even in Light mode */
+  --vellum-felt-bg: #173c2d;
+  --vellum-felt-edge: #0d261c;
+  --vellum-dice-bg: #163327;
+  --vellum-dice-border: #8c6b32;
+  --vellum-dice-ink: #f8f1e2;
+  --vellum-dice-muted: #c2cdb8;
+
+  /* Disco Elysium Multi-Voice Theater palette (Light) */
+  --vellum-spk-kp: #885410;
+  --vellum-spk-kp-bg: rgba(182, 131, 47, 0.1);
+  --vellum-spk-npc: #982822;
+  --vellum-spk-npc-bg: rgba(152, 40, 34, 0.08);
+  --vellum-spk-skill: #1c5875;
+  --vellum-spk-skill-bg: rgba(28, 88, 117, 0.09);
+  --vellum-spk-hook: #8a4b0c;
+  --vellum-spk-hook-bg: rgba(182, 131, 47, 0.14);
+
+  --vellum-shadow-sm: 0 2px 5px rgba(38, 28, 18, 0.09);
+  --vellum-shadow-md: 0 8px 22px rgba(38, 28, 18, 0.14);
 
   --vellum-font-serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", Georgia, serif;
   --vellum-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   --vellum-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  --vellum-radius-sm: 4px;
-  --vellum-radius-md: 7px;
-  --vellum-radius-lg: 10px;
+  --vellum-radius-sm: 5px;
+  --vellum-radius-md: 8px;
+  --vellum-radius-lg: 12px;
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
 
-  --vellum-bg: #13171d;
-  --vellum-surface: #1a2029;
-  --vellum-elevated: #222936;
-  --vellum-ink: #e6e1d6;
-  --vellum-muted: #97a0ae;
-  --vellum-border: #2e3746;
-  --vellum-border-strong: #435066;
+  --vellum-bg: #101512;
+  --vellum-surface: #171e1a;
+  --vellum-elevated: #202923;
+  --vellum-wood: #231a13;
+  --vellum-wood-deep: #18110c;
+  --vellum-wood-border: #4d3b26;
 
-  --vellum-accent: #c78a42;
-  --vellum-accent-hover: #d89b52;
-  --vellum-accent-soft: rgba(199, 138, 66, 0.16);
-  --vellum-accent-ink: #13171d;
+  --vellum-ink: #ede3cf;
+  --vellum-muted: #a19b8c;
+  --vellum-border: #2e3a32;
+  --vellum-border-strong: #49574d;
 
-  --vellum-success: #5ba87f;
-  --vellum-success-soft: rgba(91, 168, 127, 0.16);
-  --vellum-warning: #d89b52;
-  --vellum-warning-soft: rgba(216, 155, 82, 0.16);
-  --vellum-danger: #d96b6b;
-  --vellum-danger-soft: rgba(217, 107, 107, 0.16);
+  --vellum-accent: #d8a34a;
+  --vellum-accent-hover: #e7b560;
+  --vellum-accent-soft: rgba(216, 163, 74, 0.16);
+  --vellum-accent-ink: #17120a;
+  --vellum-brass: #d5a24c;
+  --vellum-brass-soft: rgba(213, 162, 76, 0.16);
 
-  /* Aged parchment handout lifted cleanly above the dark noir desk */
-  --vellum-handout-bg: #ede4d0;
-  --vellum-handout-border: #bfa980;
-  --vellum-handout-ink: #241e16;
-  --vellum-handout-muted: #5d503e;
+  --vellum-success: #5fb886;
+  --vellum-success-soft: rgba(95, 184, 134, 0.16);
+  --vellum-warning: #e0a74f;
+  --vellum-warning-soft: rgba(224, 167, 79, 0.16);
+  --vellum-danger: #de6860;
+  --vellum-danger-soft: rgba(222, 104, 96, 0.18);
 
-  --vellum-dice-bg: #0e1116;
-  --vellum-dice-border: #2e3746;
-  --vellum-dice-ink: #f2e7cf;
-  --vellum-dice-muted: #9ea7b4;
+  /* Aged parchment handout & Manor Blueprint lifted over dark walnut desk */
+  --vellum-handout-bg: #ece0c7;
+  --vellum-handout-border: #b89d70;
+  --vellum-handout-ink: #241c13;
+  --vellum-handout-muted: #5a4c39;
 
-  --vellum-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.28);
-  --vellum-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.36);
+  --vellum-parchment: #e5d4b3;
+  --vellum-parchment-deep: #d4be94;
+  --vellum-parchment-ink: #271c11;
+  --vellum-parchment-line: #7a613f;
+
+  /* Felt-green baize dice tray */
+  --vellum-felt-bg: #113022;
+  --vellum-felt-edge: #091d14;
+  --vellum-dice-bg: #10291e;
+  --vellum-dice-border: #7a5c2d;
+  --vellum-dice-ink: #f4ead4;
+  --vellum-dice-muted: #b0c2b4;
+
+  /* Disco Elysium Multi-Voice Theater palette (Dark) */
+  --vellum-spk-kp: #e2b45d;
+  --vellum-spk-kp-bg: rgba(226, 180, 93, 0.08);
+  --vellum-spk-npc: #e57f6f;
+  --vellum-spk-npc-bg: rgba(229, 127, 111, 0.1);
+  --vellum-spk-skill: #79bad8;
+  --vellum-spk-skill-bg: rgba(121, 186, 216, 0.1);
+  --vellum-spk-hook: #f2c46d;
+  --vellum-spk-hook-bg: rgba(242, 196, 109, 0.12);
+
+  --vellum-shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.36);
+  --vellum-shadow-md: 0 10px 28px rgba(0, 0, 0, 0.48);
 }

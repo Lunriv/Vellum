@@ -1,4 +1,4 @@
-import { BookOpen, HelpCircle, Moon, ShieldAlert, Sun, UserRound } from "lucide-react";
+import { BookOpen, Compass, HelpCircle, Moon, ShieldAlert, Sun } from "lucide-react";
 import type { ExperienceMode } from "../../api/types";
 import { useGameStore } from "../../stores/gameStore";
 
@@ -41,18 +41,26 @@ export function TopBar({
   };
 
   return (
-    <header className="sticky top-0 z-20 border-b border-[var(--vellum-border)] bg-[var(--vellum-surface)]/95 backdrop-blur-sm">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-2.5 sm:px-6">
+    <header className="sticky top-0 z-20 border-b border-[var(--vellum-wood-border)]/80 bg-[var(--vellum-wood)]/95 shadow-[var(--vellum-shadow-sm)] backdrop-blur-sm">
+      <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-3 px-4 py-2.5 sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="vellum-prose text-sm font-bold tracking-[0.14em] text-[var(--vellum-accent)]">
-            VELLUM
-          </span>
+          <div className="inline-flex items-center gap-2">
+            <span
+              className="flex h-6 w-6 items-center justify-center rounded-full border border-[var(--vellum-brass)] bg-[#8f2424] text-[10px] font-bold text-[#fdf7ea]"
+              aria-hidden="true"
+            >
+              V
+            </span>
+            <span className="vellum-prose text-sm font-bold tracking-[0.16em] text-[var(--vellum-brass)]">
+              VELLUM
+            </span>
+          </div>
           {sceneTitle ? (
             <>
-              <span className="text-[var(--vellum-border-strong)]" aria-hidden="true">
-                /
+              <span className="text-[var(--vellum-wood-border)]" aria-hidden="true">
+                ·
               </span>
-              <span className="truncate text-xs font-medium text-[var(--vellum-muted)] sm:text-sm">
+              <span className="truncate text-xs font-semibold text-[var(--vellum-ink)] sm:text-sm">
                 {sceneTitle}
               </span>
             </>
@@ -67,7 +75,7 @@ export function TopBar({
         <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
           {onExperienceModeChange ? (
             <div
-              className="inline-flex rounded-[var(--vellum-radius-sm)] border border-[var(--vellum-border)] bg-[var(--vellum-elevated)] p-0.5"
+              className="inline-flex rounded-[var(--vellum-radius-sm)] border border-[var(--vellum-wood-border)] bg-[var(--vellum-surface)] p-0.5"
               role="group"
               aria-label="体验模式"
             >
@@ -101,11 +109,11 @@ export function TopBar({
                 className={`inline-flex items-center gap-1.5 rounded-[var(--vellum-radius-sm)] border px-2.5 py-1.5 text-xs font-medium transition-colors lg:hidden ${
                   activeDrawer === "dossier"
                     ? "border-[var(--vellum-accent)] bg-[var(--vellum-accent-soft)] text-[var(--vellum-accent)]"
-                    : "border-[var(--vellum-border)] bg-[var(--vellum-surface)] text-[var(--vellum-ink)] hover:bg-[var(--vellum-elevated)]"
+                    : "border-[var(--vellum-wood-border)] bg-[var(--vellum-surface)] text-[var(--vellum-ink)] hover:bg-[var(--vellum-elevated)]"
                 }`}
               >
-                <UserRound className="h-3.5 w-3.5" />
-                <span>档案</span>
+                <Compass className="h-3.5 w-3.5 text-[var(--vellum-brass)]" />
+                <span>沙盘</span>
               </button>
 
               <button
@@ -115,13 +123,13 @@ export function TopBar({
                 className={`inline-flex items-center gap-1.5 rounded-[var(--vellum-radius-sm)] border px-2.5 py-1.5 text-xs font-medium transition-colors ${
                   activeDrawer === "evidence"
                     ? "border-[var(--vellum-accent)] bg-[var(--vellum-accent-soft)] text-[var(--vellum-accent)]"
-                    : "border-[var(--vellum-border)] bg-[var(--vellum-surface)] text-[var(--vellum-ink)] hover:bg-[var(--vellum-elevated)]"
+                    : "border-[var(--vellum-wood-border)] bg-[var(--vellum-surface)] text-[var(--vellum-ink)] hover:bg-[var(--vellum-elevated)]"
                 }`}
               >
-                <BookOpen className="h-3.5 w-3.5" />
+                <BookOpen className="h-3.5 w-3.5 text-[var(--vellum-brass)]" />
                 <span>线索板</span>
                 {cluesCount > 0 ? (
-                  <span className="vellum-mono rounded bg-[var(--vellum-elevated)] px-1.5 py-0.2 text-[10px] text-[var(--vellum-ink)]">
+                  <span className="vellum-mono rounded bg-[var(--vellum-accent)] px-1.5 py-0.2 text-[10px] font-bold text-[var(--vellum-accent-ink)]">
                     {cluesCount}
                   </span>
                 ) : null}
@@ -134,7 +142,7 @@ export function TopBar({
                 className={`inline-flex items-center gap-1.5 rounded-[var(--vellum-radius-sm)] border px-2.5 py-1.5 text-xs font-medium transition-colors ${
                   activeDrawer === "ooc"
                     ? "border-[var(--vellum-accent)] bg-[var(--vellum-accent-soft)] text-[var(--vellum-accent)]"
-                    : "border-[var(--vellum-border)] bg-[var(--vellum-surface)] text-[var(--vellum-ink)] hover:bg-[var(--vellum-elevated)]"
+                    : "border-[var(--vellum-wood-border)] bg-[var(--vellum-surface)] text-[var(--vellum-ink)] hover:bg-[var(--vellum-elevated)]"
                 }`}
                 title={hasPendingInterrupt ? "检定等待期间也可随时询问规则" : "场外规则与状态查询"}
               >
@@ -159,27 +167,29 @@ export function TopBar({
             onClick={() => setLowSanEffectsEnabled(!lowSanEffectsEnabled)}
             aria-pressed={lowSanEffectsEnabled}
             title={lowSanEffectsEnabled ? "点击关闭低理智视觉效果" : "点击开启低理智视觉效果"}
-            className="inline-flex items-center gap-1 rounded-[var(--vellum-radius-sm)] border border-[var(--vellum-border)] bg-[var(--vellum-surface)] px-2 py-1.5 text-xs text-[var(--vellum-muted)] hover:bg-[var(--vellum-elevated)] hover:text-[var(--vellum-ink)]"
+            className="inline-flex items-center gap-1 rounded-[var(--vellum-radius-sm)] border border-[var(--vellum-wood-border)] bg-[var(--vellum-surface)] px-2 py-1.5 text-xs text-[var(--vellum-muted)] hover:bg-[var(--vellum-elevated)] hover:text-[var(--vellum-ink)]"
           >
             <ShieldAlert className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">{lowSanEffectsEnabled ? "理智特效开" : "理智特效关"}</span>
+            <span className="hidden sm:inline">
+              {lowSanEffectsEnabled ? "理智特效开" : "理智特效关"}
+            </span>
           </button>
 
           <button
             type="button"
             onClick={toggleTheme}
             aria-label={theme === "light" ? "切换到雨夜夜间模式" : "切换到纸墨白天模式"}
-            className="inline-flex items-center gap-1.5 rounded-[var(--vellum-radius-sm)] border border-[var(--vellum-border)] bg-[var(--vellum-elevated)] px-2.5 py-1.5 text-xs font-medium text-[var(--vellum-ink)] hover:border-[var(--vellum-border-strong)]"
+            className="inline-flex items-center gap-1.5 rounded-[var(--vellum-radius-sm)] border border-[var(--vellum-wood-border)] bg-[var(--vellum-surface)] px-2.5 py-1.5 text-xs font-medium text-[var(--vellum-ink)] hover:border-[var(--vellum-brass)]"
           >
             {theme === "light" ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
-            <span>{theme === "light" ? "夜间" : "白天"}</span>
+            <span>{theme === "light" ? "暗桌" : "亮桌"}</span>
           </button>
 
           {onNewAdventure ? (
             <button
               type="button"
               onClick={onNewAdventure}
-              className="rounded-[var(--vellum-radius-sm)] border border-[var(--vellum-border)] px-2.5 py-1.5 text-xs text-[var(--vellum-muted)] hover:bg-[var(--vellum-elevated)] hover:text-[var(--vellum-ink)]"
+              className="rounded-[var(--vellum-radius-sm)] border border-[var(--vellum-wood-border)] bg-[var(--vellum-surface)] px-2.5 py-1.5 text-xs text-[var(--vellum-muted)] hover:bg-[var(--vellum-elevated)] hover:text-[var(--vellum-ink)]"
             >
               重新选角
             </button>

@@ -529,6 +529,7 @@ async fn get_state(State(state): State<AppState>, Path(session_id): Path<String>
         "session": meta,
         "investigator": session_state.investigator,
         "currentScene": orchestrator::visible_scene_dto(&session_state, module),
+        "mapRooms": orchestrator::map_rooms_dto(&session_state, module),
         "visibleClocks": orchestrator::visible_clocks_dto(&session_state),
         "clues": session_state.clues.values().cloned().collect::<Vec<_>>(),
         "handouts": session_state.handouts.values().cloned().collect::<Vec<_>>(),
@@ -1006,7 +1007,12 @@ async fn ooc_handler(
         return error(StatusCode::NOT_FOUND, "NOT_FOUND", "Session not found");
     };
 
-    let answer = match state.provider.answer_ooc(question, &session_state).await {
+    let recent_history = orchestrator::load_recent_history(&state.db, &session_id, 4).await;
+    let answer = match state
+        .provider
+        .answer_ooc(question, &session_state, &recent_history)
+        .await
+    {
         Ok(a) => a,
         Err(e) => return error(StatusCode::INTERNAL_SERVER_ERROR, "OOC_PROVIDER_ERROR", &e),
     };

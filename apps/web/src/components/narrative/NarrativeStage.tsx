@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, FastForward, RotateCcw } from "lucide-react";
+import { AlertCircle, FastForward, RotateCcw, UserRound } from "lucide-react";
 import type {
   ExperienceMode,
   PendingInterruptDTO,
@@ -10,6 +10,7 @@ import type { ActiveTurnViewState } from "../../stores/gameStore";
 import { useGameStore } from "../../stores/gameStore";
 import { InlineDiceCard } from "../dice/InlineDiceCard";
 import { DvpDirectiveView } from "../dynamic_views/DvpRegistry";
+import { TheaterTranscriptBlock } from "./TheaterTranscriptBlock";
 
 interface NarrativeStageProps {
   transcript: TranscriptItemDTO[];
@@ -59,7 +60,7 @@ function StreamingNarrationBlock({
       setRevealedLength((prev) => {
         const remaining = narrationText.length - prev;
         if (remaining <= 0) return narrationText.length;
-        const step = Math.max(4, Math.ceil(remaining / 8));
+        const step = Math.max(5, Math.ceil(remaining / 7));
         return Math.min(narrationText.length, prev + step);
       });
     }, 18);
@@ -69,7 +70,7 @@ function StreamingNarrationBlock({
 
   const visibleText = bypassAnimation
     ? narrationText
-    : narrationText.slice(0, Math.max(revealedLength, Math.min(narrationText.length, 12)));
+    : narrationText.slice(0, Math.max(revealedLength, Math.min(narrationText.length, 16)));
 
   const showSkipButton =
     !narrationComplete && !typewriterSkipped && !reducedMotion && narrationText.length > 0;
@@ -81,9 +82,7 @@ function StreamingNarrationBlock({
   return (
     <div className="space-y-2.5">
       {visibleText ? (
-        <div className="vellum-prose whitespace-pre-line text-[var(--vellum-ink)]">
-          {visibleText}
-        </div>
+        <TheaterTranscriptBlock text={visibleText} isStreaming={!narrationComplete} />
       ) : null}
 
       {showSkipButton ? (
@@ -147,7 +146,7 @@ export function NarrativeStage({
   return (
     <section
       aria-label="调查叙事记录"
-      className="mx-auto w-full max-w-[68ch] space-y-8 pb-8 pt-6"
+      className="mx-auto w-full max-w-[74ch] space-y-7 pb-8 pt-6"
     >
       {transcript.length === 0 && !showActiveTurn && !pendingInterrupt ? (
         <p className="vellum-prose py-8 text-sm text-[var(--vellum-muted)]">
@@ -162,16 +161,15 @@ export function NarrativeStage({
           className="space-y-4 border-b border-[var(--vellum-border)]/70 pb-7 last:border-b-0"
         >
           {entry.playerInput ? (
-            <blockquote className="border-l-2 border-[var(--vellum-border-strong)] py-0.5 pl-3.5 text-sm leading-6 text-[var(--vellum-muted)]">
-              {entry.playerInput}
-            </blockquote>
-          ) : null}
-
-          {entry.narration ? (
-            <div className="vellum-prose whitespace-pre-line text-[var(--vellum-ink)]">
-              {entry.narration}
+            <div className="flex justify-end">
+              <blockquote className="inline-flex max-w-[88%] items-start gap-2 rounded-[var(--vellum-radius-md)] border border-[var(--vellum-wood-border)]/70 bg-[var(--vellum-elevated)] px-3.5 py-2 text-sm leading-6 text-[var(--vellum-ink)] shadow-xs">
+                <UserRound className="mt-1 h-3.5 w-3.5 shrink-0 text-[var(--vellum-brass)]" />
+                <span>{entry.playerInput}</span>
+              </blockquote>
             </div>
           ) : null}
+
+          {entry.narration ? <TheaterTranscriptBlock text={entry.narration} /> : null}
 
           {entry.directives.length > 0 ? (
             <div className="space-y-3 pt-1">
@@ -190,9 +188,12 @@ export function NarrativeStage({
       {showActiveTurn && activeTurn ? (
         <article aria-label="当前进行回合" className="space-y-4">
           {activeTurn.playerInput ? (
-            <blockquote className="border-l-2 border-[var(--vellum-accent)]/70 py-0.5 pl-3.5 text-sm leading-6 text-[var(--vellum-muted)]">
-              {activeTurn.playerInput}
-            </blockquote>
+            <div className="flex justify-end">
+              <blockquote className="inline-flex max-w-[88%] items-start gap-2 rounded-[var(--vellum-radius-md)] border border-[var(--vellum-accent)]/60 bg-[var(--vellum-accent-soft)] px-3.5 py-2 text-sm leading-6 text-[var(--vellum-ink)] shadow-xs">
+                <UserRound className="mt-1 h-3.5 w-3.5 shrink-0 text-[var(--vellum-accent)]" />
+                <span>{activeTurn.playerInput}</span>
+              </blockquote>
+            </div>
           ) : null}
 
           {activeTurn.immediateDirectives.length > 0 ? (
@@ -211,10 +212,10 @@ export function NarrativeStage({
             <div
               role="status"
               aria-live="polite"
-              className="inline-flex items-center gap-2 rounded-[var(--vellum-radius-sm)] border border-[var(--vellum-border)] bg-[var(--vellum-surface)] px-3 py-1.5 text-xs text-[var(--vellum-muted)]"
+              className="inline-flex items-center gap-2 rounded-[var(--vellum-radius-sm)] border border-[var(--vellum-wood-border)] bg-[var(--vellum-surface)] px-3 py-1.5 text-xs text-[var(--vellum-brass)]"
             >
               <span
-                className="h-1.5 w-1.5 rounded-full bg-[var(--vellum-accent)]"
+                className="h-2 w-2 animate-pulse rounded-full bg-[var(--vellum-accent)]"
                 aria-hidden="true"
               />
               <span>{activeTurn.statusHint}</span>

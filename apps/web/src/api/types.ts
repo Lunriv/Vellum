@@ -108,8 +108,20 @@ export interface VisibleSceneDTO {
   atmosphere: "rain_manor" | "candlelight" | "fog" | "san_strain";
   description: string;
   tags: string[];
+  visitedSceneIds?: string[];
   exits: SceneExitDTO[];
   presentEntities: SceneEntityDTO[];
+}
+
+export interface MapRoomDTO {
+  sceneId: string;
+  title: string;
+  atmosphere: "rain_manor" | "candlelight" | "fog" | "san_strain";
+  visited: boolean;
+  isCurrent: boolean;
+  accessibleFromCurrent: boolean;
+  exitLabelFromCurrent?: string | null;
+  knownNpcs: Array<{ entityId: string; name: string }>;
 }
 
 export interface VisibleClockDTO {
@@ -230,6 +242,7 @@ export interface ClientVisibleStateDTO {
   session: SessionMetaDTO;
   investigator: InvestigatorStateDTO;
   currentScene: VisibleSceneDTO;
+  mapRooms?: MapRoomDTO[];
   visibleClocks: VisibleClockDTO[];
   clues: ClueDTO[];
   handouts: HandoutDTO[];
@@ -243,6 +256,7 @@ export interface ClientVisibleStatePatch {
   sessionStatus?: SessionStatus;
   investigator?: Partial<InvestigatorStateDTO>;
   currentScene?: VisibleSceneDTO;
+  mapRooms?: MapRoomDTO[];
   visibleClocks?: VisibleClockDTO[];
   addedClues?: ClueDTO[];
   addedHandouts?: HandoutDTO[];

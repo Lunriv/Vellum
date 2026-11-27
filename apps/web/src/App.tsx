@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, RefreshCw } from "lucide-react";
-import type { VisibleSceneDTO } from "./api/types";
+import type { RollAttemptDTO, VisibleSceneDTO } from "./api/types";
 import { AtmosphereLayer } from "./components/atmosphere/AtmosphereLayer";
-import { CharacterDossier } from "./components/character/CharacterDossier";
 import { CaseDebriefView } from "./components/debrief/CaseDebriefView";
 import { EvidenceBoardDrawer } from "./components/evidence/EvidenceBoardDrawer";
 import { TopBar } from "./components/layout/TopBar";
 import { ActionComposer } from "./components/narrative/ActionComposer";
 import { NarrativeStage } from "./components/narrative/NarrativeStage";
+import { parseTheaterNarration } from "./components/narrative/TheaterTranscriptBlock";
 import { OocDrawer } from "./components/ooc/OocDrawer";
+import { TabletopBattlefieldPane } from "./components/tabletop/TabletopBattlefieldPane";
 import { TurnZeroSetup } from "./components/turn0/TurnZeroSetup";
 import { useSessionSync } from "./hooks/useSessionSync";
 import { useGameStore } from "./stores/gameStore";
@@ -19,6 +20,13 @@ const VALID_ATMOSPHERES = new Set<VisibleSceneDTO["atmosphere"]>([
   "fog",
   "san_strain",
 ]);
+
+function extractRollFromPayload(payload: Record<string, unknown>): RollAttemptDTO | null {
+  if (typeof payload.rollValue === "number" && typeof payload.skill === "string") {
+    return payload as unknown as RollAttemptDTO;
+  }
+  return null;
+}
 
 export function App() {
   const theme = useGameStore((s) => s.theme);
@@ -78,6 +86,47 @@ export function App() {
       !pendingInterrupt,
   );
 
+  // Extract latest Keeper contextual 1-click choices from the most recent completed narration
+  const latestDynamicChoices = useMemo<string[]>(() => {
+    if (activeTurn?.narrationComplete && activeTurn.narrationText) {
+      const parsed = parseTheaterNarration(activeTurn.narrationText);
+      if (parsed.choices.length > 0) return parsed.choices;
+    }
+    const list = sessionState?.transcript ?? [];
+    for (let i = list.length - 1; i >= 0; i -= 1) {
+      const parsed = parseTheaterNarration(list[i].narration);
+      if (parsed.choices.length > 0) return parsed.choices;
+    }
+    return [];
+  }, [activeTurn?.narrationComplete, activeTurn?.narrationText, sessionState?.transcript]);
+
+  // Keep the physical felt Dice Tray synced with the latest authoritative dice roll
+  const lastRoll = useMemo<RollAttemptDTO | null>(() => {
+    if (activeTurn) {
+      const allActiveDirs = [
+        ...activeTurn.immediateDirectives,
+        ...activeTurn.releasedAfterNarration,
+      ];
+      for (let i = allActiveDirs.length - 1; i >= 0; i -= 1) {
+        if (allActiveDirs[i].directiveType === "inline_dice") {
+          const found = extractRollFromPayload(allActiveDirs[i].payload);
+          if (found) return found;
+        }
+      }
+    }
+    const list = sessionState?.transcript ?? [];
+    for (let i = list.length - 1; i >= 0; i -= 1) {
+      const dirs = list[i].directives ?? [];
+      for (let j = dirs.length - 1; j >= 0; j -= 1) {
+        if (dirs[j].directiveType === "inline_dice") {
+          const found = extractRollFromPayload(dirs[j].payload);
+          if (found) return found;
+        }
+      }
+    }
+    return null;
+  }, [activeTurn, sessionState?.transcript]);
+
   const handleRetryInterruptedAction = async (actionInput: string) => {
     const trimmed = actionInput.trim();
     if (!trimmed || retryingTurn) return;
@@ -87,6 +136,11 @@ export function App() {
     } finally {
       setRetryingTurn(false);
     }
+  };
+
+  const handleDirectTabletopAction = (actionText: string) => {
+    if (Boolean(pendingInterrupt) || Boolean(sessionEnded) || isTurnBusy) return;
+    void submitTurn(actionText);
   };
 
   const handleNewAdventure = () => {
@@ -164,11 +218,29 @@ export function App() {
       ) : isLoadingSession && !sessionState && !activeTurn ? (
         <main className="mx-auto max-w-2xl px-4 py-12 sm:px-6">
           <p className="vellum-prose text-sm text-[var(--vellum-muted)]">
-            正在恢复调查现场与过往记录……
+            正在铺开庄园沙盘与过往调查记录……
           </p>
         </main>
       ) : (
-        <div className="mx-auto flex w-full max-w-6xl flex-1">
+        <div className="mx-auto flex w-full max-w-[1440px] flex-1">
+          {sessionState ? (
+            <TabletopBattlefieldPane
+              investigator={sessionState.investigator}
+              currentScene={sessionState.currentScene}
+              mapRooms={sessionState.mapRooms}
+              visibleClocks={sessionState.visibleClocks}
+              pendingInterrupt={pendingInterrupt}
+              lastRoll={lastRoll}
+              isResolvingInterrupt={isResolvingInterrupt}
+              mobileDrawerOpen={activeDrawer === "dossier"}
+              actionLocked={Boolean(pendingInterrupt) || Boolean(sessionEnded) || isTurnBusy}
+              onCloseMobileDrawer={() => setActiveDrawer(null)}
+              onExecuteAction={handleDirectTabletopAction}
+              onQuickFillAction={(actionText) => setComposerDraft(actionText)}
+              onResolveInterrupt={(payload) => void resolveInterrupt(payload)}
+            />
+          ) : null}
+
           <div className="flex min-w-0 flex-1 flex-col justify-between">
             <main className="flex-1 px-4 sm:px-6">
               <NarrativeStage
@@ -190,6 +262,7 @@ export function App() {
               onDraftChange={setComposerDraft}
               onSubmitAction={submitTurn}
               experienceMode={experienceMode}
+              dynamicChoices={latestDynamicChoices}
               guidedPrompts={sessionState?.guidedPrompts}
               pendingInterrupt={pendingInterrupt}
               isTurnBusy={isTurnBusy}
@@ -198,18 +271,6 @@ export function App() {
               onOpenDebrief={() => setDebriefOpen(true)}
             />
           </div>
-
-          {sessionState ? (
-            <CharacterDossier
-              investigator={sessionState.investigator}
-              currentScene={sessionState.currentScene}
-              visibleClocks={sessionState.visibleClocks}
-              mobileDrawerOpen={activeDrawer === "dossier"}
-              onCloseMobileDrawer={() => setActiveDrawer(null)}
-              onQuickFillAction={(actionText) => setComposerDraft(actionText)}
-              actionLocked={Boolean(pendingInterrupt) || Boolean(sessionEnded)}
-            />
-          ) : null}
         </div>
       )}
 
