@@ -311,8 +311,9 @@ pub async fn run_narration_recovery(
         created_at: Utc::now().to_rfc3339(),
     };
     let _ = event_repo::insert_transcript(&state.db, &session_id, &record).await;
-    let _ = turn_repo::set_status(&state.db, &turn_id, TurnStatus::Completed).await;
     let _ = session_repo::set_active_turn(&state.db, &session_id, None).await;
+    state.locks.clear_active(&session_id).await;
+    let _ = turn_repo::set_status(&state.db, &turn_id, TurnStatus::Completed).await;
 
     buffer
         .push(

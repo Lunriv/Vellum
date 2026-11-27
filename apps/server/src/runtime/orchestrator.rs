@@ -524,8 +524,9 @@ pub async fn run_turn0(state: AppState, session_id: String, turn0_id: String) {
         created_at: Utc::now().to_rfc3339(),
     };
     let _ = event_repo::insert_transcript(&state.db, &session_id, &tr).await;
-    let _ = turn_repo::set_status(&state.db, &turn0_id, TurnStatus::Completed).await;
     let _ = session_repo::set_active_turn(&state.db, &session_id, None).await;
+    state.locks.clear_active(&session_id).await;
+    let _ = turn_repo::set_status(&state.db, &turn0_id, TurnStatus::Completed).await;
 
     let patch = build_client_state_patch(&session_state, version + 1, "active", Some(&module));
     buffer
@@ -547,7 +548,6 @@ pub async fn run_turn0(state: AppState, session_id: String, turn0_id: String) {
         )
         .await;
     buffer.complete("completed").await;
-    state.locks.clear_active(&session_id).await;
 }
 
 /// Executes a player IC turn asynchronously OUTSIDE the short Session Command Lock.
@@ -621,8 +621,9 @@ pub async fn run_player_turn(state: AppState, session_id: String, turn_id: Strin
             &full_text,
         )
         .await;
-        let _ = turn_repo::set_status(&state.db, &turn_id, TurnStatus::Completed).await;
         let _ = session_repo::set_active_turn(&state.db, &session_id, None).await;
+        state.locks.clear_active(&session_id).await;
+        let _ = turn_repo::set_status(&state.db, &turn_id, TurnStatus::Completed).await;
         buffer
             .push(
                 "narration_complete",
@@ -636,7 +637,6 @@ pub async fn run_player_turn(state: AppState, session_id: String, turn_id: Strin
             )
             .await;
         buffer.complete("completed").await;
-        state.locks.clear_active(&session_id).await;
         return;
     }
 
@@ -717,7 +717,6 @@ pub async fn run_player_turn(state: AppState, session_id: String, turn_id: Strin
         )
         .await;
         let _ = turn_repo::save_interrupt(&state.db, &interrupt).await;
-        let _ = turn_repo::set_status(&state.db, &turn_id, TurnStatus::AwaitingRoll).await;
         let _ = session_repo::cas_snapshot(
             &state.db,
             &session_id,
@@ -727,6 +726,8 @@ pub async fn run_player_turn(state: AppState, session_id: String, turn_id: Strin
             Some(Some(&turn_id)),
         )
         .await;
+        state.locks.clear_active(&session_id).await;
+        let _ = turn_repo::set_status(&state.db, &turn_id, TurnStatus::AwaitingRoll).await;
 
         buffer.set_status("awaiting_roll").await;
         buffer.set_pending_interrupt(Some(interrupt.clone())).await;
@@ -744,7 +745,6 @@ pub async fn run_player_turn(state: AppState, session_id: String, turn_id: Strin
                 json!({ "type": "state_delta", "patch": patch }),
             )
             .await;
-        state.locks.clear_active(&session_id).await;
         return;
     }
 
@@ -1228,8 +1228,9 @@ pub async fn run_player_turn(state: AppState, session_id: String, turn_id: Strin
     )
     .await;
 
-    let _ = turn_repo::set_status(&state.db, &turn_id, TurnStatus::Completed).await;
     let _ = session_repo::set_active_turn(&state.db, &session_id, None).await;
+    state.locks.clear_active(&session_id).await;
+    let _ = turn_repo::set_status(&state.db, &turn_id, TurnStatus::Completed).await;
 
     let patch = build_client_state_patch(
         &session_state,
@@ -1256,7 +1257,6 @@ pub async fn run_player_turn(state: AppState, session_id: String, turn_id: Strin
         )
         .await;
     buffer.complete("completed").await;
-    state.locks.clear_active(&session_id).await;
 }
 
 /// Completes a turn after a PendingInterrupt resolves into Committing (pass, fail, Luck spend, or Push).
@@ -1533,8 +1533,9 @@ pub async fn complete_resolved_check_turn(
     )
     .await;
 
-    let _ = turn_repo::set_status(&state.db, &turn_id, TurnStatus::Completed).await;
     let _ = session_repo::set_active_turn(&state.db, &session_id, None).await;
+    state.locks.clear_active(&session_id).await;
+    let _ = turn_repo::set_status(&state.db, &turn_id, TurnStatus::Completed).await;
 
     let patch = build_client_state_patch(&session_state, version + 1, "active", module.as_ref());
     buffer
@@ -1556,7 +1557,6 @@ pub async fn complete_resolved_check_turn(
         )
         .await;
     buffer.complete("completed").await;
-    state.locks.clear_active(&session_id).await;
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1842,6 +1842,7 @@ async fn emit_narration_pending_error(
 ) {
     // Authoritative state is already committed; preserve `narration_pending` and `active_turn_id`
     // so lazy SSE RecoveryLease can complete narration without re-rolling dice or re-mutating state.
+    state.locks.clear_active(session_id).await;
     let _ = turn_repo::set_status(&state.db, turn_id, TurnStatus::NarrationPending).await;
     buffer
         .push(
@@ -1855,7 +1856,6 @@ async fn emit_narration_pending_error(
         )
         .await;
     buffer.complete("narration_pending").await;
-    state.locks.clear_active(session_id).await;
 }
 
 async fn emit_turn_error(
@@ -1866,8 +1866,9 @@ async fn emit_turn_error(
     code: &str,
     message: &str,
 ) {
-    let _ = turn_repo::set_status(&state.db, turn_id, TurnStatus::Failed).await;
     let _ = session_repo::set_active_turn(&state.db, session_id, None).await;
+    state.locks.clear_active(session_id).await;
+    let _ = turn_repo::set_status(&state.db, turn_id, TurnStatus::Failed).await;
     buffer
         .push(
             "turn_error",
@@ -1880,7 +1881,6 @@ async fn emit_turn_error(
         )
         .await;
     buffer.complete("failed").await;
-    state.locks.clear_active(session_id).await;
 }
 
 fn chunk_text(text: &str) -> Vec<String> {
