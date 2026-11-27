@@ -607,7 +607,7 @@ async fn startup_scan_and_concurrent_recovery_lease_cas() {
     let module = state.modules.get("crimson_rain_manor").unwrap();
     let initial = vellum_server::runtime::orchestrator::build_initial_session_state(
         "sess-rec",
-        module,
+        &module,
         "investigator_reporter",
     )
     .unwrap();
@@ -802,4 +802,148 @@ async fn concurrent_interrupt_resolve_same_idempotency_key_rolls_once() {
         roll_events, 1,
         "concurrent identical idempotent confirm_roll must execute exactly one dice roll"
     );
+}
+
+#[tokio::test]
+async fn generate_import_delete_custom_world_and_play_full_check_turn() {
+    // Seeded roll: units=1, tens=2 -> 21 (passes Hard psychology <= 32 on generated world's inv_scout!)
+    let rng = Box::new(SequenceRng::new(&[1, 2]));
+    let (_dir, state, app) = test_app(Duration::ZERO, Some(rng)).await;
+
+    // 1. Generate a brand-new non-manor world via POST /api/modules/generate
+    let (st_gen, gen_body) = json_request(
+        &app,
+        Method::POST,
+        "/api/modules/generate",
+        None,
+        Some(json!({
+            "title": "林海雪站",
+            "prompt": "1988年暴风雪封山的东北林场招待所，住客里有人冒名顶替。",
+            "sceneCount": 4
+        })),
+    )
+    .await;
+    assert_eq!(st_gen, StatusCode::CREATED);
+    let gen_mod_id = gen_body["module"]["moduleId"].as_str().unwrap().to_string();
+    assert_eq!(gen_body["module"]["title"], "林海雪站");
+    assert_eq!(gen_body["module"]["sourceKind"], "generated");
+    let inv_id = gen_body["investigators"][0]["investigatorId"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // 2. GET /api/modules lists both the generated world and built-in sample
+    let (st_list, list_body) = json_request(&app, Method::GET, "/api/modules", None, None).await;
+    assert_eq!(st_list, StatusCode::OK);
+    let mods = list_body["modules"].as_array().unwrap();
+    assert!(mods.iter().any(|m| m["moduleId"] == gen_mod_id));
+
+    // 3. Start a live session on the brand-new generated world (zero manor IDs!)
+    let (st_sess, sess_body) = json_request(
+        &app,
+        Method::POST,
+        "/api/sessions",
+        Some("idem-gen-sess-1"),
+        Some(json!({
+            "moduleId": gen_mod_id,
+            "investigatorId": inv_id,
+            "experienceMode": "classic"
+        })),
+    )
+    .await;
+    assert_eq!(st_sess, StatusCode::CREATED);
+    let sid = sess_body["session"]["sessionId"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let t0 = sess_body["turn0Id"].as_str().unwrap().to_string();
+    wait_turn_finished(&state, &t0).await;
+
+    // Turn 0 dynamically unlocked the generated world's starter clue + mapEdges + moduleTitle,
+    // while strictly hiding `coverup_countdown` (keeper_hidden)!
+    let (st_state, st_body) = json_request(
+        &app,
+        Method::GET,
+        &format!("/api/sessions/{sid}/state"),
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(st_state, StatusCode::OK);
+    assert_eq!(st_body["moduleTitle"], "林海雪站");
+    assert_eq!(st_body["clues"].as_array().unwrap().len(), 1);
+    assert!(!st_body["mapEdges"].as_array().unwrap().is_empty());
+    assert!(!st_body.to_string().contains("coverup_countdown"));
+    assert!(st_body.to_string().contains("alert_pressure"));
+
+    // 4. Trigger & pass a psychology check in the generated world -> unlocks generated world's skill clue!
+    let (st_turn, t1_body) = json_request(
+        &app,
+        Method::POST,
+        &format!("/api/sessions/{sid}/turns"),
+        Some("idem-gen-psy-1"),
+        Some(json!({ "input": "[心理学] 察言观色，审视值班主管老周的微表情" })),
+    )
+    .await;
+    assert_eq!(st_turn, StatusCode::ACCEPTED);
+    let t1_id = t1_body["turnId"].as_str().unwrap().to_string();
+    wait_turn_finished(&state, &t1_id).await;
+
+    let (_, st_int) = json_request(
+        &app,
+        Method::GET,
+        &format!("/api/sessions/{sid}/state"),
+        None,
+        None,
+    )
+    .await;
+    let int_id = st_int["pendingInterrupt"]["interruptId"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let (st_roll, _) = json_request(
+        &app,
+        Method::POST,
+        &format!("/api/sessions/{sid}/interrupts/{int_id}/resolve"),
+        Some("idem-gen-roll-1"),
+        Some(json!({ "action": "confirm_roll" })),
+    )
+    .await;
+    assert_eq!(st_roll, StatusCode::OK);
+    wait_turn_finished(&state, &t1_id).await;
+
+    let (_, after_roll) = json_request(
+        &app,
+        Method::GET,
+        &format!("/api/sessions/{sid}/state"),
+        None,
+        None,
+    )
+    .await;
+    assert!(after_roll["clues"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|c| c["clueId"] == "clue_warden_slip"));
+
+    // 5. Built-in modules cannot be deleted (403); custom generated modules can be deleted cleanly
+    let (st_del_builtin, _) = json_request(
+        &app,
+        Method::DELETE,
+        "/api/modules/crimson_rain_manor",
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(st_del_builtin, StatusCode::FORBIDDEN);
+
+    let (st_del_custom, _) = json_request(
+        &app,
+        Method::DELETE,
+        &format!("/api/modules/{gen_mod_id}"),
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(st_del_custom, StatusCode::OK);
 }

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import type {
   InvestigatorStateDTO,
+  MapEdgeDTO,
   MapRoomDTO,
   PendingInterruptDTO,
   ResolveInterruptRequest,
@@ -22,12 +23,15 @@ import type {
   VisibleSceneDTO,
 } from "../../api/types";
 import { DiceTrayWidget } from "./DiceTrayWidget";
-import { ManorBattlefieldMap } from "./ManorBattlefieldMap";
+import { DynamicWorldMap } from "./DynamicWorldMap";
 
 interface TabletopBattlefieldPaneProps {
+  moduleTitle?: string;
   investigator: InvestigatorStateDTO;
   currentScene: VisibleSceneDTO;
   mapRooms?: MapRoomDTO[];
+  mapEdges?: MapEdgeDTO[];
+  worldTags?: string[];
   visibleClocks: VisibleClockDTO[];
   pendingInterrupt: PendingInterruptDTO | null;
   lastRoll?: RollAttemptDTO | null;
@@ -141,9 +145,12 @@ function CompactStatBar({
 }
 
 function TabletopBody({
+  moduleTitle,
   investigator,
   currentScene,
   mapRooms,
+  mapEdges,
+  worldTags,
   visibleClocks,
   pendingInterrupt,
   lastRoll,
@@ -268,10 +275,13 @@ function TabletopBody({
         ) : null}
       </section>
 
-      {/* 2. Manor Battlefield Floorplan & Present Interactive Stage Entities */}
-      <ManorBattlefieldMap
+      {/* 2. Universal Dynamic World Map & Present Interactive Stage Entities */}
+      <DynamicWorldMap
+        moduleTitle={moduleTitle}
         currentScene={currentScene}
         mapRooms={mapRooms}
+        mapEdges={mapEdges}
+        worldTags={worldTags}
         actionLocked={actionLocked}
         onExecuteAction={onExecuteAction}
       />
@@ -409,9 +419,12 @@ function TabletopBody({
 }
 
 export function TabletopBattlefieldPane({
+  moduleTitle,
   investigator,
   currentScene,
   mapRooms,
+  mapEdges,
+  worldTags,
   visibleClocks,
   pendingInterrupt,
   lastRoll,
@@ -445,14 +458,17 @@ export function TabletopBattlefieldPane({
   return (
     <>
       <aside
-        aria-label="跑团桌面与庄园沙盘"
+        aria-label="跑团桌面与动态沙盘"
         className="hidden w-[408px] shrink-0 border-r border-[var(--vellum-wood-border)]/60 bg-[var(--vellum-surface)]/75 lg:block xl:w-[436px]"
       >
         <div className="sticky top-[53px] max-h-[calc(100vh-53px)] overflow-y-auto">
           <TabletopBody
+            moduleTitle={moduleTitle}
             investigator={investigator}
             currentScene={currentScene}
             mapRooms={mapRooms}
+            mapEdges={mapEdges}
+            worldTags={worldTags}
             visibleClocks={visibleClocks}
             pendingInterrupt={pendingInterrupt}
             lastRoll={lastRoll}
@@ -480,7 +496,7 @@ export function TabletopBattlefieldPane({
           <div className="relative z-10 flex h-full w-full max-w-[360px] flex-col border-r border-[var(--vellum-wood-border)] bg-[var(--vellum-bg)] shadow-[var(--vellum-shadow-md)]">
             <div className="flex items-center justify-between border-b border-[var(--vellum-border)] bg-[var(--vellum-surface)] px-4 py-3">
               <span className="text-sm font-semibold text-[var(--vellum-ink)]">
-                庄园沙盘与骰盘
+                世界沙盘与骰盘
               </span>
               <button
                 type="button"
@@ -493,9 +509,12 @@ export function TabletopBattlefieldPane({
             </div>
             <div className="flex-1 overflow-y-auto">
               <TabletopBody
+                moduleTitle={moduleTitle}
                 investigator={investigator}
                 currentScene={currentScene}
                 mapRooms={mapRooms}
+                mapEdges={mapEdges}
+                worldTags={worldTags}
                 visibleClocks={visibleClocks}
                 pendingInterrupt={pendingInterrupt}
                 lastRoll={lastRoll}

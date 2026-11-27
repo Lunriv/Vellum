@@ -11,7 +11,7 @@ use crate::kernel::{
     RollResultLevel, SceneState, SessionState, TurnStatus,
 };
 use crate::models::{NarrationContext, TurnHistoryItem};
-use crate::modules::{evaluate_module_predicate, ModuleIr, SceneDefinition};
+use crate::modules::{evaluate_module_predicate, ModuleIr, Predicate, SceneDefinition};
 use crate::persistence::{
     db::Database,
     event_repo::{self, DirectiveDto, TranscriptRecord},
@@ -349,34 +349,62 @@ pub fn map_rooms_dto(state: &SessionState, module: Option<&ModuleIr>) -> Vec<Val
         .collect()
 }
 
-pub fn guided_prompts_for_scene(scene_id: &str) -> Vec<String> {
-    match scene_id {
-        "manor_foyer" => vec![
-            "审视管家微表情，试探三年前访客的下落".into(),
-            "检查墙上的家族肖像是否有暗格".into(),
-            "前往书房".into(),
-        ],
-        "study_room" => vec![
-            "撬开书桌锁住的抽屉".into(),
-            "翻看书架后的庄园旧剪报".into(),
-            "前往女仆偏厅".into(),
-        ],
-        "maids_parlor" => vec![
-            "温和安抚女仆 Mary 并询问昨夜钟声".into(),
-            "检查银托盘背面的刻纹".into(),
-            "前往暴雨庭院".into(),
-        ],
-        "rain_courtyard" => vec![
-            "查看温室外的泥痕与脚印".into(),
-            "找铁铲撬开酒窖后窗".into(),
-            "前往酒窖入口".into(),
-        ],
-        "cellar_entrance" => vec![
-            "调查酒窖铁门后的酒窖账本".into(),
-            "返回门厅，出示账本与老管家对质揭露真相结案".into(),
-        ],
-        _ => vec!["观察周围环境".into()],
+/// Projects corridor edges between rooms for the generic auto-layout world map.
+pub fn map_edges_dto(state: &SessionState, module: Option<&ModuleIr>) -> Vec<Value> {
+    let Some(m) = module else {
+        return Vec::new();
+    };
+    let mut seen: BTreeSet<(String, String)> = BTreeSet::new();
+    let mut edges = Vec::new();
+    for scene in &m.scenes {
+        for exit in &scene.exits {
+            let locked = exit
+                .condition
+                .as_ref()
+                .map(|cond| !evaluate_module_predicate(cond, state, None))
+                .unwrap_or(false);
+            let pair = if exit.bidirectional && scene.scene_id > exit.target_scene_id {
+                (exit.target_scene_id.clone(), scene.scene_id.clone())
+            } else {
+                (scene.scene_id.clone(), exit.target_scene_id.clone())
+            };
+            if seen.insert(pair) {
+                edges.push(json!({
+                    "fromSceneId": scene.scene_id,
+                    "toSceneId": exit.target_scene_id,
+                    "bidirectional": exit.bidirectional,
+                    "locked": locked,
+                }));
+            }
+        }
     }
+    edges
+}
+
+pub fn guided_prompts_for_scene(state: &SessionState, module: Option<&ModuleIr>) -> Vec<String> {
+    let mut prompts = Vec::new();
+    if let Some(scene) = module.and_then(|m| m.find_scene(&state.current_scene.scene_id)) {
+        if let Some(npc) = scene.entities.iter().find(|e| e.kind == "npc") {
+            prompts.push(format!("[心理学] 试探{}的破绽", npc.name));
+        }
+        if let Some(obj) = scene.entities.iter().find(|e| e.kind == "object") {
+            prompts.push(format!("仔细检查{}", obj.name));
+        }
+        for exit in &scene.exits {
+            let accessible = exit
+                .condition
+                .as_ref()
+                .map(|c| evaluate_module_predicate(c, state, None))
+                .unwrap_or(true);
+            if accessible && prompts.len() < 3 {
+                prompts.push(exit.label.clone());
+            }
+        }
+    }
+    if prompts.is_empty() {
+        prompts.push("观察周围环境".into());
+    }
+    prompts
 }
 
 pub fn build_client_state_patch(
@@ -385,30 +413,48 @@ pub fn build_client_state_patch(
     session_status: &str,
     module: Option<&ModuleIr>,
 ) -> Value {
+    let world_tags: Vec<&String> = state.events.iter().collect();
     json!({
         "sessionVersion": session_version,
         "sessionStatus": session_status,
+        "moduleTitle": module.map(|m| m.title.as_str()).unwrap_or(&state.module_id),
         "investigator": state.investigator,
         "currentScene": visible_scene_dto(state, module),
         "mapRooms": map_rooms_dto(state, module),
+        "mapEdges": map_edges_dto(state, module),
+        "worldTags": world_tags,
         "visibleClocks": visible_clocks_dto(state),
         "addedClues": state.clues.values().cloned().collect::<Vec<_>>(),
         "addedHandouts": state.handouts.values().cloned().collect::<Vec<_>>(),
         "pendingInterrupt": state.pending_interrupt,
-        "guidedPrompts": guided_prompts_for_scene(&state.current_scene.scene_id),
+        "guidedPrompts": guided_prompts_for_scene(state, module),
     })
 }
 
+fn predicate_is_always(pred: &Predicate) -> bool {
+    matches!(pred, Predicate::Always(_))
+}
+
+fn predicate_mentions_skill(pred: &Predicate, skill: &str) -> bool {
+    match pred {
+        Predicate::SkillSuccess { skill_success } => skill_success == skill,
+        Predicate::All { all } => all.iter().any(|p| predicate_mentions_skill(p, skill)),
+        Predicate::Any { any } => any.iter().any(|p| predicate_mentions_skill(p, skill)),
+        Predicate::Not { not } => predicate_mentions_skill(not, skill),
+        _ => false,
+    }
+}
+
 /// Turn 0 automated opening sequence:
-/// Emits immediate atmosphere, streams opening prologue, persists & releases the initial
-/// commission letter (`after_narration`) + clue, commits state, and clears active_turn_id.
+/// Emits immediate atmosphere, unlocks any module-declared initial `Always` starter clues & handouts
+/// (`after_narration`), streams live opening narration, commits state, and clears active_turn_id.
 pub async fn run_turn0(state: AppState, session_id: String, turn0_id: String) {
     let buffer = state.buffers.get_or_create(&turn0_id);
     buffer.set_status("narrating").await;
     buffer
         .push(
             "status_hint",
-            json!({ "type": "status_hint", "text": "暴雨正敲打庄园铁门，正在展开开篇序幕……", "turnId": turn0_id }),
+            json!({ "type": "status_hint", "text": "正在展开世界沙盘与开场局势……", "turnId": turn0_id }),
         )
         .await;
 
@@ -420,7 +466,7 @@ pub async fn run_turn0(state: AppState, session_id: String, turn0_id: String) {
         return;
     };
 
-    let Some(module) = state.modules.get(&session_state.module_id).cloned() else {
+    let Some(module) = state.modules.get(&session_state.module_id) else {
         buffer.complete("failed").await;
         state.locks.clear_active(&session_id).await;
         return;
@@ -430,12 +476,13 @@ pub async fn run_turn0(state: AppState, session_id: String, turn0_id: String) {
         .await
         .unwrap_or(1);
     let mut directives_to_emit: Vec<DirectiveDto> = Vec::new();
+    let mut directive_seq: i64 = 2;
 
     // Immediate atmosphere shift
     let atm_payload = json!({
         "theme": session_state.current_scene.atmosphere,
         "sceneTitle": format!("{} · {}", module.title, session_state.current_scene.title),
-        "note": "暴雨封锁了通往山脊的旧道",
+        "note": session_state.current_scene.description,
         "intensity": "subtle",
     });
     if let Ok(d) = event_repo::save_directive(
@@ -461,109 +508,107 @@ pub async fn run_turn0(state: AppState, session_id: String, turn0_id: String) {
             .await;
     }
 
-    // Unlock initial commission letter clue & canonical handout (after_narration!)
+    // Dynamically unlock starter clues (`condition: always` in initial_scene_id) & their canonical handouts
     let mut ref_event_ids = Vec::new();
-    if let Some(clue_def) = module.find_clue("commission_letter_clue") {
-        let clue = ClueState {
-            clue_id: clue_def.clue_id.clone(),
-            title: clue_def.title.clone(),
-            summary: clue_def.summary.clone(),
-            source_label: clue_def.source_label.clone(),
-            discovered_at_turn_id: turn0_id.clone(),
-            is_conclusion: clue_def.is_conclusion,
-        };
-        let ev_id = Uuid::new_v4().to_string();
-        let ev = GameEventKind::ClueUnlocked { clue: clue.clone() };
-        apply_event(&mut session_state, &ev);
-        let _ = event_repo::append(
-            &state.db,
-            &ev_id,
-            &session_id,
-            &turn0_id,
-            seq,
-            &ev,
-            &module.version,
-            None,
-        )
-        .await;
-        seq += 1;
-        ref_event_ids.push(ev_id);
+    let mut starter_notes = Vec::new();
+    let initial_scene_id = module.initial_scene_id.clone();
+    let starter_clue_ids: Vec<String> = module
+        .clues
+        .iter()
+        .filter(|c| !c.is_conclusion)
+        .filter(|c| {
+            let in_initial = c.scene_ids.is_empty() || c.scene_ids.contains(&initial_scene_id);
+            let always_ready = c
+                .acquisition_paths
+                .iter()
+                .any(|p| predicate_is_always(&p.condition));
+            in_initial && always_ready
+        })
+        .map(|c| c.clue_id.clone())
+        .collect();
 
-        if let Ok(d) = event_repo::save_directive(
-            &state.db,
-            &format!("dir-clue-{}-{}", clue.clue_id, turn0_id),
+    for cid in starter_clue_ids {
+        if let Some(note) = unlock_clue_and_handout(
+            &state,
             &session_id,
             &turn0_id,
-            1,
-            "kernel_owned",
-            "evidence_unlocked",
-            "after_narration",
-            &json!({
-                "clueId": clue.clue_id,
-                "title": clue.title,
-                "summary": clue.summary,
-                "sourceLabel": clue.source_label,
-            }),
-            Some(2),
+            &module,
+            &cid,
+            &mut session_state,
+            &mut seq,
+            &mut directive_seq,
+            &mut ref_event_ids,
+            &mut directives_to_emit,
         )
         .await
         {
-            directives_to_emit.push(d);
+            starter_notes.push(note);
         }
     }
 
-    if let Some(handout_def) = module.find_handout("commission_letter") {
-        let handout = HandoutState {
-            handout_id: handout_def.handout_id.clone(),
-            kind: handout_def.kind.clone(),
-            title: handout_def.title.clone(),
-            canonical: handout_def.canonical,
-            clue_id: handout_def.clue_id.clone(),
-            source_facts: handout_def.source_facts.clone(),
-            presentation_text: handout_def.presentation_text.clone(),
-            unlocked_at_turn_id: turn0_id.clone(),
-        };
-        let ev_id = Uuid::new_v4().to_string();
-        let ev = GameEventKind::HandoutReleased {
-            handout: handout.clone(),
-        };
-        apply_event(&mut session_state, &ev);
-        let _ = event_repo::append(
-            &state.db,
-            &ev_id,
-            &session_id,
-            &turn0_id,
-            seq,
-            &ev,
-            &module.version,
-            None,
-        )
-        .await;
-        ref_event_ids.push(ev_id);
-
-        if let Ok(d) = event_repo::save_directive(
-            &state.db,
-            &format!("dir-handout-{}-{}", handout.handout_id, turn0_id),
-            &session_id,
-            &turn0_id,
-            1,
-            "kernel_owned",
-            "diegetic_handout",
-            "after_narration",
-            &json!({
-                "handoutId": handout.handout_id,
-                "kind": handout.kind,
-                "title": handout.title,
-                "canonical": handout.canonical,
-                "clueId": handout.clue_id,
-                "sourceFacts": handout.source_facts,
-                "presentationText": handout.presentation_text,
-            }),
-            Some(3),
-        )
-        .await
+    // Also release any standalone handout whose unlock_condition is `Always`
+    for h_def in &module.handouts {
+        if h_def
+            .unlock_condition
+            .as_ref()
+            .map(predicate_is_always)
+            .unwrap_or(false)
+            && !session_state.handouts.contains_key(&h_def.handout_id)
         {
-            directives_to_emit.push(d);
+            let handout = HandoutState {
+                handout_id: h_def.handout_id.clone(),
+                kind: h_def.kind.clone(),
+                title: h_def.title.clone(),
+                canonical: h_def.canonical,
+                clue_id: h_def.clue_id.clone(),
+                source_facts: h_def.source_facts.clone(),
+                presentation_text: h_def.presentation_text.clone(),
+                unlocked_at_turn_id: turn0_id.clone(),
+            };
+            let ev_id = Uuid::new_v4().to_string();
+            let ev = GameEventKind::HandoutReleased {
+                handout: handout.clone(),
+            };
+            apply_event(&mut session_state, &ev);
+            let _ = event_repo::append(
+                &state.db,
+                &ev_id,
+                &session_id,
+                &turn0_id,
+                seq,
+                &ev,
+                &module.version,
+                None,
+            )
+            .await;
+            seq += 1;
+            ref_event_ids.push(ev_id);
+
+            if let Ok(d) = event_repo::save_directive(
+                &state.db,
+                &format!("dir-handout-{}-{}", handout.handout_id, turn0_id),
+                &session_id,
+                &turn0_id,
+                1,
+                "kernel_owned",
+                "diegetic_handout",
+                "after_narration",
+                &json!({
+                    "handoutId": handout.handout_id,
+                    "kind": handout.kind,
+                    "title": handout.title,
+                    "canonical": handout.canonical,
+                    "clueId": handout.clue_id,
+                    "sourceFacts": handout.source_facts,
+                    "presentationText": handout.presentation_text,
+                }),
+                Some(directive_seq),
+            )
+            .await
+            {
+                directive_seq += 1;
+                directives_to_emit.push(d);
+            }
         }
     }
 
@@ -594,17 +639,26 @@ pub async fn run_turn0(state: AppState, session_id: String, turn0_id: String) {
         .find_investigator(&session_state.investigator.investigator_id)
         .map(|p| {
             format!(
-                "角色背景：{}；动机：{}；与庄园渊源：{}",
+                "背景：{}；动机：{}；现场渊源：{}",
                 p.biography, p.motivation, p.manor_connection
             )
         })
         .unwrap_or_default();
+    let starter_summary = if starter_notes.is_empty() {
+        String::new()
+    } else {
+        format!("\n开场已掌握线索：\n{}", starter_notes.join("\n"))
+    };
     let opening_outcome = format!(
-        "开场序幕：{}\n调查员身份：{}「{}」（{}）\n已随身获得线索「无署名委托函」与实体证物，要求查清三年前庄园访客失踪案并留意酒窖。\n老管家 Arthur 正提着黄铜提灯守在壁炉旁迎上前来。",
+        "世界：{}\n开场序幕：{}\n调查员：{}「{}」（{}）\n起始地点：{}（{}）{}",
+        module.title,
         module.opening_prologue.trim(),
         session_state.investigator.occupation,
         session_state.investigator.name,
         preset_hook,
+        session_state.current_scene.title,
+        session_state.current_scene.description,
+        starter_summary,
     );
     let opening_ctx = NarrationContext {
         history: &[],
@@ -612,17 +666,26 @@ pub async fn run_turn0(state: AppState, session_id: String, turn0_id: String) {
         is_opening: true,
     };
 
+    let fallback_prompts = guided_prompts_for_scene(&session_state, Some(&module));
+    let fallback_choices = fallback_prompts
+        .iter()
+        .enumerate()
+        .map(|(i, p)| format!("{}. {}", i + 1, p))
+        .collect::<Vec<_>>()
+        .join("\n");
     let fallback_opening = format!(
-        "【守秘人】{}\n\n你以{}「{}」的身份站在{}。老管家 Arthur 提着一盏黄铜提灯迎上前来，微弱灯影映出他克制而警惕的神色。\n\n【老管家 Arthur】「外头暴雨封山，女主人今夜身体不适。阁下既持函而来，不妨先在门厅歇脚——只是酒窖那边湿滑失修，还请莫要独自走近。」\n\n【直觉·侦查】他的礼数无可挑剔，可提灯微晃时，你瞥见他袖口边缘沾着一点尚未干透的深色蜡油。\n\n【抉择】老管家正等着你表明来意，书房与女仆偏厅的廊灯就在前方——你第一步打算怎么做？\n\n【建议行动】\n1. [心理学] 盯住 Arthur 的袖口与神情，直接追问三年前失踪访客的下落\n2. [侦查] 借口欣赏油画，凑近检查壁炉旁的家族肖像\n3. 暂不打草惊蛇，礼貌颔首后转身前往书房",
+        "【守秘人】{} 你以{}「{}」的身份站在「{}」。{}\n\n【抉择】局面已经展开，你第一步打算怎么出手？\n\n【建议行动】\n{}",
         module.opening_prologue.trim(),
         session_state.investigator.occupation,
         session_state.investigator.name,
-        session_state.current_scene.title
+        session_state.current_scene.title,
+        session_state.current_scene.description,
+        fallback_choices,
     );
 
     let chunks = match state
         .provider
-        .stream_narration("开场序幕", &session_state, &opening_ctx)
+        .stream_narration("开场序幕", &session_state, Some(&module), &opening_ctx)
         .await
     {
         Ok(c) if !c.is_empty() => c,
@@ -713,7 +776,7 @@ pub async fn run_player_turn(state: AppState, session_id: String, turn_id: Strin
         state.locks.clear_active(&session_id).await;
         return;
     };
-    let module = state.modules.get(&session_state.module_id).cloned();
+    let module = state.modules.get(&session_state.module_id);
 
     let history = load_recent_history(&state.db, &session_id, 6).await;
 
@@ -726,12 +789,12 @@ pub async fn run_player_turn(state: AppState, session_id: String, turn_id: Strin
 
         let path_a_ctx = NarrationContext {
             history: &history,
-            outcome_summary: Some("纯环境观察回合：未发生房间移动、掷骰或状态变更，请给出细腻现场感、在场人物反应与下一步抉择。"),
+            outcome_summary: Some("纯环境观察回合：未发生房间移动、掷骰或状态变更，请给出简练现场感、在场人物反应与下一步抉择。"),
             is_opening: false,
         };
         let chunks = match state
             .provider
-            .stream_narration(&input, &session_state, &path_a_ctx)
+            .stream_narration(&input, &session_state, module.as_ref(), &path_a_ctx)
             .await
         {
             Ok(c) => c,
@@ -796,7 +859,7 @@ pub async fn run_player_turn(state: AppState, session_id: String, turn_id: Strin
 
     let proposal = match state
         .provider
-        .propose_action(&input, &session_state, &history)
+        .propose_action(&input, &session_state, module.as_ref(), &history)
         .await
     {
         Ok(p) => p,
@@ -1350,7 +1413,7 @@ pub async fn run_player_turn(state: AppState, session_id: String, turn_id: Strin
     };
     let chunks = match state
         .provider
-        .stream_narration(&input, &session_state, &narration_ctx)
+        .stream_narration(&input, &session_state, module.as_ref(), &narration_ctx)
         .await
     {
         Ok(c) => c,
@@ -1471,7 +1534,7 @@ pub async fn complete_resolved_check_turn(
         state.locks.clear_active(&session_id).await;
         return;
     };
-    let module = state.modules.get(&session_state.module_id).cloned();
+    let module = state.modules.get(&session_state.module_id);
 
     let mut next_seq = event_repo::next_event_seq(&state.db, &session_id)
         .await
@@ -1534,35 +1597,56 @@ pub async fn complete_resolved_check_turn(
         }
     }
 
-    // Apply outcome effects
+    // Apply outcome effects dynamically from ModuleIr (zero hardcoded scenario IDs!)
     let mut roll_notes: Vec<String> = Vec::new();
     if final_roll.passed {
         if let Some(m) = module.as_ref() {
-            let clue_to_unlock = match final_roll.skill.as_str() {
-                "psychology" => Some("butler_contradiction_clue"),
-                "locksmith" => {
-                    if session_state.current_scene.scene_id == "cellar_entrance" {
-                        Some("cellar_ledger_clue")
-                    } else {
-                        Some("bloodstained_cuff_clue")
-                    }
-                }
-                "spot_hidden" => {
-                    if session_state.current_scene.scene_id == "rain_courtyard" {
-                        Some("courtyard_tracks_clue")
-                    } else {
-                        Some("manor_clipping_clue")
-                    }
-                }
-                _ => None,
-            };
-            if let Some(cid) = clue_to_unlock {
+            let cur_scene_id = session_state.current_scene.scene_id.as_str();
+            let skill_match_in_scene = m.clues.iter().find(|c| {
+                !c.is_conclusion
+                    && !session_state.clues.contains_key(&c.clue_id)
+                    && c.scene_ids.iter().any(|s| s == cur_scene_id)
+                    && c.acquisition_paths
+                        .iter()
+                        .any(|p| predicate_mentions_skill(&p.condition, &final_roll.skill))
+            });
+            let skill_match_any = m.clues.iter().find(|c| {
+                !c.is_conclusion
+                    && !session_state.clues.contains_key(&c.clue_id)
+                    && c.acquisition_paths
+                        .iter()
+                        .any(|p| predicate_mentions_skill(&p.condition, &final_roll.skill))
+            });
+            let entity_clue_in_scene = m
+                .find_scene(cur_scene_id)
+                .and_then(|sc| {
+                    sc.entities
+                        .iter()
+                        .flat_map(|e| e.clue_ids.iter())
+                        .find(|cid| {
+                            !session_state.clues.contains_key(*cid)
+                                && m.find_clue(cid).map(|c| !c.is_conclusion).unwrap_or(false)
+                        })
+                })
+                .and_then(|cid| m.find_clue(cid));
+            let any_clue_in_scene = m.clues.iter().find(|c| {
+                !c.is_conclusion
+                    && !session_state.clues.contains_key(&c.clue_id)
+                    && c.scene_ids.iter().any(|s| s == cur_scene_id)
+            });
+
+            if let Some(clue_def) = skill_match_in_scene
+                .or(entity_clue_in_scene)
+                .or(skill_match_any)
+                .or(any_clue_in_scene)
+            {
+                let cid = clue_def.clue_id.clone();
                 if let Some(note) = unlock_clue_and_handout(
                     &state,
                     &session_id,
                     &turn_id,
                     m,
-                    cid,
+                    &cid,
                     &mut session_state,
                     &mut next_seq,
                     &mut directive_seq,
@@ -1576,47 +1660,62 @@ pub async fn complete_resolved_check_turn(
             }
         }
     } else {
-        // Fail Forward: advance visible anomaly clock (and escalated SAN loss if pushed)
+        // Fail Forward: dynamically advance first PlayerVisible & first KeeperHidden clocks
         let amount = if was_pushed { 2 } else { 1 };
         let reason = if was_pushed {
-            "孤注一掷再次失手，引来庄园深处剧烈异动"
+            "孤注一掷再次失手，局面明显恶化"
         } else {
-            "检定失利拖延了时间，庄园里的异常愈发明显"
+            "检定失利拖延了时间，现场压力进一步升高"
         };
-        advance_clock_and_maybe_emit(
-            &state,
-            &session_id,
-            &turn_id,
-            "manor_anomaly",
-            amount,
-            reason,
-            &mut session_state,
-            &mut next_seq,
-            &mut directive_seq,
-            &mut ref_event_ids,
-            &mut directives_to_emit,
-        )
-        .await;
-        if let Some(clk) = session_state.clocks.get("manor_anomaly") {
-            roll_notes.push(format!(
-                "可见危机时钟「{}」推进至 {}/{}（{}）",
-                clk.name, clk.current, clk.max, reason
-            ));
+        let visible_clock_id = session_state
+            .clocks
+            .values()
+            .find(|c| c.visibility == ClockVisibility::PlayerVisible)
+            .map(|c| c.clock_id.clone());
+        let hidden_clock_id = session_state
+            .clocks
+            .values()
+            .find(|c| c.visibility == ClockVisibility::KeeperHidden)
+            .map(|c| c.clock_id.clone());
+
+        if let Some(vis_id) = visible_clock_id {
+            advance_clock_and_maybe_emit(
+                &state,
+                &session_id,
+                &turn_id,
+                &vis_id,
+                amount,
+                reason,
+                &mut session_state,
+                &mut next_seq,
+                &mut directive_seq,
+                &mut ref_event_ids,
+                &mut directives_to_emit,
+            )
+            .await;
+            if let Some(clk) = session_state.clocks.get(&vis_id) {
+                roll_notes.push(format!(
+                    "可见危机时钟「{}」推进至 {}/{}（{}）",
+                    clk.name, clk.current, clk.max, reason
+                ));
+            }
         }
-        advance_clock_and_maybe_emit(
-            &state,
-            &session_id,
-            &turn_id,
-            "ritual_countdown",
-            1,
-            "调查受阻令幕后仪式推进了一步",
-            &mut session_state,
-            &mut next_seq,
-            &mut directive_seq,
-            &mut ref_event_ids,
-            &mut directives_to_emit,
-        )
-        .await;
+        if let Some(hid_id) = hidden_clock_id {
+            advance_clock_and_maybe_emit(
+                &state,
+                &session_id,
+                &turn_id,
+                &hid_id,
+                1,
+                "调查受阻令幕后局势推进了一步",
+                &mut session_state,
+                &mut next_seq,
+                &mut directive_seq,
+                &mut ref_event_ids,
+                &mut directives_to_emit,
+            )
+            .await;
+        }
 
         if was_pushed {
             session_state.investigator.san = (session_state.investigator.san - 1).max(0);
@@ -1721,28 +1820,28 @@ pub async fn complete_resolved_check_turn(
     let fallback_prose = if final_roll.passed {
         if let Some(cost) = luck_spent {
             format!(
-                "【守秘人】千钧一发之际，你凭直觉（消耗 {} 点幸运）稳住了手脚。{}检定惊险通过，关键破绽终于落入你的眼中。\n\n【抉择】趁着眼前局势刚刚松动，你要如何顺势追击？\n\n【建议行动】\n1. 顺着刚发现的破绽继续追问细节\n2. 检查周围是否还有可相互印证的物证\n3. 暂作记录，转往相邻房间扩大排查",
+                "【守秘人】千钧一发之际你消耗 {} 点幸运稳住手脚，{}检定惊险通过，关键破绽落入眼底。\n\n【抉择】趁势追击还是立刻换线？\n\n【建议行动】\n1. 追问刚露出的破绽\n2. 排查相邻区域",
                 cost, skill_cn
             )
         } else if was_pushed {
             format!(
-                "【守秘人】顶着升级的风险孤注一掷（掷出 {}），你的{}尝试终于奏效，撬开了此前紧闭的突破口。\n\n【抉择】突破口已经敞开，下一步你打算怎么利用这份收获？\n\n【建议行动】\n1. 趁热打铁继续深挖眼前的线索\n2. 带着刚到手的发现向在场人物当面求证\n3. 立刻转移至下一个关键房间",
+                "【守秘人】孤注一掷成功（掷出 {}），你的{}终于撕开了一道突破口。\n\n【抉择】下一步怎么扩大战果？\n\n【建议行动】\n1. 深挖眼前的发现\n2. 带着线索转移阵地",
                 final_roll.roll_value, skill_cn
             )
         } else {
             format!(
-                "【守秘人】你的{}检定干脆利落（掷出 {} / 目标 {}，{}），在烛影晃动间捕捉到了决定性的线索。\n\n【抉择】真相的拼图多了一块，接下来你想从哪一步切入？\n\n【建议行动】\n1. 顺着刚捕捉到的细节继续追问\n2. 细查房间内其余可疑物件\n3. 带着线索前往其他房间交叉印证",
+                "【守秘人】{}检定通过（掷出 {} / 目标 {}，{}），你抓住了现场关键细节。\n\n【抉择】你打算怎么利用这条破绽？\n\n【建议行动】\n1. 顺势质问在场人物\n2. 前往相邻区域核实",
                 skill_cn, final_roll.roll_value, final_roll.target_number, result_cn
             )
         }
     } else if was_pushed {
         format!(
-            "【守秘人】孤注一掷终判失手（掷出 {}）。工具发出的脆响在雨夜长廊里回荡，烛火猛然一暗，庄园深处传来一声低沉的钟鸣。\n\n【抉择】骚动已经惊动了庄园深处，你是咬牙留在原地还是立刻换一条路？\n\n【建议行动】\n1. 稳住心神，试着从另一处线索绕行\n2. 离开当前房间，避免正面暴露\n3. 先向在场人物试探刚才的钟声",
+            "【守秘人】孤注一掷失手（掷出 {}），动静惊动了暗处的对手，现场危机立刻升级。\n\n【抉择】留下来硬扛还是赶紧换条路线？\n\n【建议行动】\n1. 立刻转移到相邻区域\n2. 换一种绕行办法破局",
             final_roll.roll_value
         )
     } else {
         format!(
-            "【守秘人】这次{}尝试未能如愿（掷出 {}），你在受挫的同时察觉到走廊温度骤降——时间并不站在你这边，或许还有其他绕行之法。\n\n【抉择】正面试探受挫，你要换个切入点还是去别的房间找突破口？\n\n【建议行动】\n1. 观察房间内是否有可替代的明面线索\n2. 换一种温和或迂回的方式继续交涉\n3. 先前往相邻房间寻找新的工具或证词",
+            "【守秘人】{}检定未通过（掷出 {}），现场局势明显紧绷起来。\n\n【抉择】正面受阻，你要换个切入点还是改道探索？\n\n【建议行动】\n1. 检查现场其他可互动目标\n2. 转向相邻区域寻找突破口",
             skill_cn, final_roll.roll_value
         )
     };
@@ -1754,7 +1853,7 @@ pub async fn complete_resolved_check_turn(
     };
     let chunks = match state
         .provider
-        .stream_narration(&turn_input, &session_state, &roll_ctx)
+        .stream_narration(&turn_input, &session_state, module.as_ref(), &roll_ctx)
         .await
     {
         Ok(c) if !c.is_empty() => c,

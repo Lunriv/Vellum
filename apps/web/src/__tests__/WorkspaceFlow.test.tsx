@@ -490,6 +490,21 @@ describe("WorkspaceFlow end-to-end UI interactions", () => {
     vi.spyOn(vellumApi, "getSessionState").mockRejectedValueOnce(
       new ApiError(404, "NOT_FOUND", "Session not found"),
     );
+    vi.spyOn(vellumApi, "listModules").mockResolvedValue({
+      modules: [
+        {
+          moduleId: "crimson_rain_manor",
+          version: "1.0.0",
+          title: "绯雨庄园",
+          openingPrologue: "测试世界开场。",
+          sourceKind: "builtin",
+          sceneCount: 5,
+          npcCount: 3,
+          investigatorCount: 1,
+          clueCount: 5,
+        },
+      ],
+    });
     vi.spyOn(vellumApi, "listInvestigators").mockResolvedValue({
       moduleId: "crimson_rain_manor",
       moduleTitle: "绯雨庄园",

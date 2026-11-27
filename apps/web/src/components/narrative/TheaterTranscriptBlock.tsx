@@ -17,17 +17,18 @@ function cleanPlainText(raw: string): string {
   return raw.replace(/\*\*/g, "").trim();
 }
 
+const SPEAKER_TONES = ["#b6772b", "#9d3338", "#3d7a8f", "#487a4e", "#7a4e8c", "#8f5432"];
+
 function npcMonogram(speaker: string): { glyph: string; tone: string } {
-  if (speaker.includes("Arthur") || speaker.includes("管家")) {
-    return { glyph: "管", tone: "#b6772b" };
+  const clean = speaker.trim();
+  let hash = 0;
+  for (let i = 0; i < clean.length; i += 1) {
+    hash = (hash * 31 + clean.charCodeAt(i)) >>> 0;
   }
-  if (speaker.includes("Evelyn") || speaker.includes("女主人")) {
-    return { glyph: "伊", tone: "#9d3338" };
-  }
-  if (speaker.includes("Mary") || speaker.includes("女仆")) {
-    return { glyph: "玛", tone: "#3d7a8f" };
-  }
-  return { glyph: speaker.slice(0, 1) || "人", tone: "#8f4b32" };
+  return {
+    glyph: clean.slice(0, 1) || "人",
+    tone: SPEAKER_TONES[hash % SPEAKER_TONES.length],
+  };
 }
 
 /**

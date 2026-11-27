@@ -107,8 +107,11 @@ pub fn build_case_debrief(
         (ending.title.clone(), ending.summary.clone())
     } else {
         (
-            "雨夜未尽的余波".into(),
-            "调查员提前结束了在绯雨庄园的查探，部分核心真相仍留在雨幕之后。".into(),
+            "未竟的调查余波".into(),
+            format!(
+                "调查员提前结束了在「{}」的查探，部分核心真相仍留在暗处。",
+                module.title
+            ),
         )
     };
 
@@ -167,7 +170,7 @@ pub fn build_case_debrief(
                 });
                 player_impact.push(PlayerImpactDto {
                     choice: "偏离预设路线的即兴策略".into(),
-                    consequence: "成功开辟了替代调查途径并改变了庄园格局。".into(),
+                    consequence: "成功开辟了替代调查途径并改写了当前局势。".into(),
                     source_event_ids: vec![ev.event_id.clone()],
                 });
             }
@@ -202,8 +205,8 @@ pub fn build_case_debrief(
     if true_chronology.is_empty() {
         if let Some(first_ev) = events.first() {
             true_chronology.push(ChronologyEntryDto {
-                title: "踏入绯雨庄园".into(),
-                detail: "在暴雨夜展开调查并完成归档。".into(),
+                title: format!("踏入「{}」", module.title),
+                detail: "展开现场调查并完成记录归档。".into(),
                 source_event_ids: vec![first_ev.event_id.clone()],
             });
         }

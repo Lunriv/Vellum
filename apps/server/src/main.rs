@@ -51,12 +51,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     vellum_server::runtime::recovery::scan_startup(&db).await?;
 
     let modules = Arc::new(vellum_server::modules::ModuleRegistry::load_default()?);
+    if let Ok(stored_modules) = vellum_server::persistence::module_repo::list_all(&db).await {
+        for item in stored_modules {
+            let _ = modules.register(item.module, item.source_kind, item.source_prompt);
+        }
+    }
     let llm_mode = std::env::var("VELLUM_LLM_MODE").unwrap_or_else(|_| "mock".into());
     let (provider, active_model): (Arc<dyn vellum_server::models::LlmProvider>, String) =
         if llm_mode == "live" {
             let live = vellum_server::models::live::LiveProvider::from_env()
-                .map_err(std::io::Error::other)?
-                .with_modules(modules.clone());
+                .map_err(std::io::Error::other)?;
             let model_name = live.model.clone();
             (Arc::new(live), model_name)
         } else {

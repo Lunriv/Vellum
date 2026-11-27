@@ -91,7 +91,7 @@ export function CaseDebriefView({
             结案真相复盘卷宗
           </h1>
           <p className="mt-2.5 text-sm leading-7 text-[var(--vellum-muted)]">
-            本卷宗将完整公开《绯雨庄园》的真实事发经过、所有核心人物的隐秘动机、守秘人幕后进度钟，以及其他分支结局的达成条件。若你打算换一位调查员重玩探索未知路线，建议暂缓翻阅。
+            本卷宗将完整公开当前世界模组的真实事发经过、所有核心人物的隐秘动机、守秘人幕后进度钟，以及其他分支结局的达成条件。若你打算换一位调查员重玩探索未知路线，建议暂缓翻阅。
           </p>
 
           <div className="mt-6 flex flex-wrap items-center gap-3">

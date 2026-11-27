@@ -10,16 +10,40 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     fs,
     path::{Path, PathBuf},
+    sync::{Arc, RwLock},
 };
+
+pub mod generator;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct ModuleIr {
+pub struct ModuleSummary {
     pub module_id: String,
     pub version: String,
     pub title: String,
     pub opening_prologue: String,
+    pub source_kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_prompt: Option<String>,
+    pub scene_count: usize,
+    pub npc_count: usize,
+    pub investigator_count: usize,
+    pub clue_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ModuleIr {
+    #[serde(default)]
+    pub module_id: String,
+    #[serde(default = "default_version")]
+    pub version: String,
+    pub title: String,
+    #[serde(default)]
+    pub opening_prologue: String,
+    #[serde(default)]
     pub investigators: Vec<InvestigatorPreset>,
+    #[serde(default)]
     pub initial_scene_id: String,
     #[serde(default)]
     pub endings: Vec<EndingCondition>,
@@ -37,19 +61,33 @@ pub struct ModuleIr {
     pub clocks: Vec<ClockDefinition>,
 }
 
+fn default_version() -> String {
+    "1.0.0".into()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct InvestigatorPreset {
+    #[serde(default)]
     pub investigator_id: String,
     pub name: String,
+    #[serde(default)]
     pub occupation: String,
+    #[serde(default)]
     pub tagline: String,
+    #[serde(default)]
     pub biography: String,
+    #[serde(default)]
     pub motivation: String,
+    #[serde(default)]
     pub manor_connection: String,
+    #[serde(default = "default_ten")]
     pub hp_max: i32,
+    #[serde(default = "default_ten")]
     pub mp_max: i32,
+    #[serde(default = "default_fifty")]
     pub san_start: i32,
+    #[serde(default = "default_fifty")]
     pub luck_start: i32,
     #[serde(default)]
     pub strengths: Vec<SkillStrength>,
@@ -61,36 +99,56 @@ pub struct InvestigatorPreset {
     pub skills: BTreeMap<String, i32>,
 }
 
+fn default_ten() -> i32 {
+    10
+}
+fn default_fifty() -> i32 {
+    50
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillStrength {
     pub skill: String,
+    #[serde(default)]
     pub label: String,
+    #[serde(default = "default_fifty")]
     pub rating: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct StartingItem {
+    #[serde(default)]
     pub item_id: String,
     pub name: String,
+    #[serde(default)]
     pub description: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct EndingCondition {
+    #[serde(default)]
     pub ending_id: String,
     pub title: String,
+    #[serde(default)]
     pub summary: String,
+    #[serde(default = "default_always_predicate")]
     pub condition: Predicate,
+}
+
+fn default_always_predicate() -> Predicate {
+    Predicate::Always(AlwaysKeyword::Always)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ReviewFact {
+    #[serde(default)]
     pub fact_id: String,
     pub title: String,
+    #[serde(default)]
     pub detail: String,
     #[serde(default)]
     pub source_clue_ids: Vec<String>,
@@ -99,9 +157,12 @@ pub struct ReviewFact {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SceneDefinition {
+    #[serde(default)]
     pub scene_id: String,
     pub title: String,
+    #[serde(default = "default_atmosphere")]
     pub atmosphere: String,
+    #[serde(default)]
     pub description: String,
     #[serde(default)]
     pub tags: Vec<String>,
@@ -111,22 +172,31 @@ pub struct SceneDefinition {
     pub entities: Vec<SceneEntity>,
 }
 
+fn default_atmosphere() -> String {
+    "fog".into()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SceneExit {
     pub target_scene_id: String,
+    #[serde(default)]
     pub label: String,
     #[serde(default)]
     pub bidirectional: bool,
+    #[serde(default)]
     pub condition: Option<Predicate>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SceneEntity {
+    #[serde(default)]
     pub entity_id: String,
     pub name: String,
+    #[serde(default)]
     pub role: String,
+    #[serde(default = "default_object_kind")]
     pub kind: String,
     #[serde(default)]
     pub summary: String,
@@ -134,12 +204,19 @@ pub struct SceneEntity {
     pub clue_ids: Vec<String>,
 }
 
+fn default_object_kind() -> String {
+    "object".into()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ClueDefinition {
+    #[serde(default)]
     pub clue_id: String,
     pub title: String,
+    #[serde(default)]
     pub summary: String,
+    #[serde(default)]
     pub source_label: String,
     #[serde(default)]
     pub is_conclusion: bool,
@@ -154,34 +231,52 @@ pub struct ClueDefinition {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AcquisitionPath {
+    #[serde(default)]
     pub path_id: String,
+    #[serde(default)]
     pub description: String,
+    #[serde(default = "default_always_predicate")]
     pub condition: Predicate,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct HandoutDefinition {
+    #[serde(default)]
     pub handout_id: String,
+    #[serde(default = "default_note_kind")]
     pub kind: String,
     pub title: String,
+    #[serde(default = "default_true_bool")]
     pub canonical: bool,
+    #[serde(default)]
     pub clue_id: Option<String>,
     #[serde(default)]
     pub source_facts: Vec<String>,
+    #[serde(default)]
     pub presentation_text: String,
     #[serde(default)]
     pub unlock_condition: Option<Predicate>,
 }
 
+fn default_note_kind() -> String {
+    "note".into()
+}
+fn default_true_bool() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct NpcDefinition {
+    #[serde(default)]
     pub entity_id: String,
     pub name: String,
+    #[serde(default)]
     pub personality: String,
     #[serde(default)]
     pub working_knowledge: Vec<String>,
+    #[serde(default)]
     pub cover_story: String,
     #[serde(default)]
     pub behavioral_tells: Vec<String>,
@@ -194,7 +289,9 @@ pub struct NpcDefinition {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ProtectedTruth {
+    #[serde(default)]
     pub secret_id: String,
+    #[serde(default)]
     pub raw_truth: String,
     #[serde(default)]
     pub tell: Option<String>,
@@ -205,11 +302,18 @@ pub struct ProtectedTruth {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct TruthStage {
+    #[serde(default = "default_tier")]
     pub tier: String,
+    #[serde(default = "default_always_predicate")]
     pub predicate: Predicate,
     #[serde(default)]
     pub releasable_fact_ids: Vec<String>,
+    #[serde(default)]
     pub truth: String,
+}
+
+fn default_tier() -> String {
+    "partial".into()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -223,12 +327,22 @@ pub struct NpcRelation {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ClockDefinition {
+    #[serde(default)]
     pub clock_id: String,
     pub name: String,
+    #[serde(default = "default_visible_clock")]
     pub visibility: String,
+    #[serde(default = "default_clock_max")]
     pub max: u32,
     #[serde(default)]
     pub stages: Vec<ClockStage>,
+}
+
+fn default_visible_clock() -> String {
+    "player_visible".into()
+}
+fn default_clock_max() -> u32 {
+    6
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -290,6 +404,7 @@ pub enum Predicate {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RelationRequirement {
+    #[serde(alias = "entity_id")]
     pub entity_id: String,
     pub relation: String,
     pub value: i32,
@@ -303,6 +418,7 @@ pub struct FlagRequirement {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ClockRequirement {
+    #[serde(alias = "clock_id")]
     pub clock_id: String,
     pub value: u32,
 }
@@ -408,9 +524,16 @@ pub fn evaluate_module_predicate(
     }
 }
 
+#[derive(Debug, Clone)]
+struct RegisteredModule {
+    module: ModuleIr,
+    source_kind: String,
+    source_prompt: Option<String>,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct ModuleRegistry {
-    modules: HashMap<String, ModuleIr>,
+    modules: Arc<RwLock<HashMap<String, RegisteredModule>>>,
 }
 
 impl ModuleRegistry {
@@ -429,11 +552,20 @@ impl ModuleRegistry {
                 let path = entry.path();
                 if path.is_dir() && path.join("module.yaml").exists() {
                     let module = load_module(&path)?;
-                    modules.insert(module.module_id.clone(), module);
+                    modules.insert(
+                        module.module_id.clone(),
+                        RegisteredModule {
+                            module,
+                            source_kind: "builtin".into(),
+                            source_prompt: None,
+                        },
+                    );
                 }
             }
         }
-        Ok(Self { modules })
+        Ok(Self {
+            modules: Arc::new(RwLock::new(modules)),
+        })
     }
 
     pub fn load_default() -> Result<Self, ModuleError> {
@@ -443,21 +575,114 @@ impl ModuleRegistry {
             Some(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../modules")),
         ];
         for candidate in candidates.into_iter().flatten() {
-            if candidate
-                .join("crimson_rain_manor")
-                .join("module.yaml")
-                .exists()
-            {
-                return Self::load_dir(candidate);
+            if candidate.is_dir() {
+                let has_any_module = fs::read_dir(&candidate)
+                    .ok()
+                    .map(|entries| {
+                        entries.filter_map(Result::ok).any(|entry| {
+                            let p = entry.path();
+                            p.is_dir() && p.join("module.yaml").exists()
+                        })
+                    })
+                    .unwrap_or(false);
+                if has_any_module {
+                    return Self::load_dir(candidate);
+                }
             }
         }
         Err(ModuleError::Validation(
-            "could not locate modules directory containing crimson_rain_manor".into(),
+            "could not locate modules directory containing any valid module.yaml".into(),
         ))
     }
 
-    pub fn get(&self, module_id: &str) -> Option<&ModuleIr> {
-        self.modules.get(module_id)
+    pub fn get(&self, module_id: &str) -> Option<ModuleIr> {
+        self.modules
+            .read()
+            .ok()?
+            .get(module_id)
+            .map(|r| r.module.clone())
+    }
+
+    pub fn is_builtin(&self, module_id: &str) -> bool {
+        self.modules
+            .read()
+            .ok()
+            .and_then(|map| map.get(module_id).map(|r| r.source_kind == "builtin"))
+            .unwrap_or(false)
+    }
+
+    pub fn register(
+        &self,
+        module: ModuleIr,
+        source_kind: impl Into<String>,
+        source_prompt: Option<String>,
+    ) -> Result<ModuleSummary, ModuleError> {
+        validate_module(&module)?;
+        let kind = source_kind.into();
+        let summary = summarize_module(&module, &kind, source_prompt.as_deref());
+        let mut guard = self
+            .modules
+            .write()
+            .map_err(|_| ModuleError::Validation("module registry lock poisoned".into()))?;
+        guard.insert(
+            module.module_id.clone(),
+            RegisteredModule {
+                module,
+                source_kind: kind,
+                source_prompt,
+            },
+        );
+        Ok(summary)
+    }
+
+    pub fn remove_custom(&self, module_id: &str) -> Result<bool, String> {
+        let mut guard = self
+            .modules
+            .write()
+            .map_err(|_| "module registry lock poisoned".to_string())?;
+        if let Some(existing) = guard.get(module_id) {
+            if existing.source_kind == "builtin" {
+                return Err("内置演示模组不可删除".into());
+            }
+        }
+        Ok(guard.remove(module_id).is_some())
+    }
+
+    pub fn list_summaries(&self) -> Vec<ModuleSummary> {
+        let Ok(guard) = self.modules.read() else {
+            return Vec::new();
+        };
+        let mut list: Vec<ModuleSummary> = guard
+            .values()
+            .map(|r| summarize_module(&r.module, &r.source_kind, r.source_prompt.as_deref()))
+            .collect();
+        // Put user-created / generated worlds first, then built-in demos, stably sorted by title
+        list.sort_by(|a, b| {
+            let rank = |k: &str| if k == "builtin" { 1 } else { 0 };
+            rank(&a.source_kind)
+                .cmp(&rank(&b.source_kind))
+                .then_with(|| a.title.cmp(&b.title))
+        });
+        list
+    }
+}
+
+pub fn summarize_module(
+    module: &ModuleIr,
+    source_kind: &str,
+    source_prompt: Option<&str>,
+) -> ModuleSummary {
+    ModuleSummary {
+        module_id: module.module_id.clone(),
+        version: module.version.clone(),
+        title: module.title.clone(),
+        opening_prologue: module.opening_prologue.clone(),
+        source_kind: source_kind.to_string(),
+        source_prompt: source_prompt.map(str::to_owned),
+        scene_count: module.scenes.len(),
+        npc_count: module.npcs.len(),
+        investigator_count: module.investigators.len(),
+        clue_count: module.clues.len(),
     }
 }
 

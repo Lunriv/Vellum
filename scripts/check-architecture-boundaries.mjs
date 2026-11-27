@@ -32,11 +32,24 @@ function checkForbiddenPatterns(files, rules) {
     const rel = path.relative(repoRoot, file).replace(/\\/g, "/");
     const content = fs.readFileSync(file, "utf8");
     const lines = content.split(/\r?\n/);
+    const rustTestLine = rel.endsWith(".rs")
+      ? lines.findIndex((line) => /^\s*#\[cfg\(test\)\]/.test(line))
+      : -1;
     for (const rule of rules) {
-      if (rule.skipTestFiles && (rel.includes("/tests/") || rel.endsWith("_test.rs") || rel.endsWith(".test.ts") || rel.endsWith(".test.tsx"))) {
+      if (
+        rule.skipTestFiles &&
+        (rel.includes("/tests/") ||
+          rel.includes("/__tests__/") ||
+          rel.endsWith("_test.rs") ||
+          rel.endsWith(".test.ts") ||
+          rel.endsWith(".test.tsx"))
+      ) {
         continue;
       }
       lines.forEach((line, idx) => {
+        if (rule.skipRustTestBlocks && rustTestLine !== -1 && idx >= rustTestLine) {
+          return;
+        }
         if (rule.pattern.test(line)) {
           violations.push({
             file: rel,
@@ -108,6 +121,25 @@ checkForbiddenPatterns(rootManifests, [
     id: "NO_FORBIDDEN_V1_INFRA",
     pattern: /["'\s](?:redis|deadpool-redis|neo4rs|langgraph|celery|faiss)["'\s=]/i,
     message: "Section 19 #9 forbids introducing Redis, Neo4j, LangGraph, Celery, or FAISS in V1.",
+  },
+]);
+
+// 5. Generic TRPG Engine Guard: runtime, api, models, and UI must NEVER hardcode single-scenario IDs!
+const engineSourceFiles = [
+  ...walkFiles(path.join(repoRoot, "apps", "server", "src", "runtime"), [".rs"]),
+  ...walkFiles(path.join(repoRoot, "apps", "server", "src", "api"), [".rs"]),
+  ...walkFiles(path.join(repoRoot, "apps", "server", "src", "models"), [".rs"]),
+  ...walkFiles(path.join(repoRoot, "apps", "web", "src"), [".ts", ".tsx"]),
+];
+checkForbiddenPatterns(engineSourceFiles, [
+  {
+    id: "ENGINE_NO_HARDCODED_SCENARIO_IDS",
+    pattern:
+      /(?:\b(?:crimson_rain_manor|manor_foyer|study_room|maids_parlor|rain_courtyard|cellar_entrance|butler_arthur|lady_evelyn|maid_mary|commission_letter_clue|cellar_ledger_clue|bloodstained_cuff_clue|manor_anomaly|ritual_countdown|ManorBattlefield)\b|绯雨庄园)/,
+    message:
+      "Core engine & UI must stay 100% module-agnostic; load scenes, NPCs, clues, and clocks dynamically from ModuleIr.",
+    skipTestFiles: true,
+    skipRustTestBlocks: true,
   },
 ]);
 

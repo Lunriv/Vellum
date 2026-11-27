@@ -120,7 +120,7 @@ async fn golden_trace_deterministic_replay_matches_snapshot() {
 fn red_team_npc_provenance_cross_scene_inaudible_bluff_and_protected_truth() {
     let modules = ModuleRegistry::load_default().unwrap();
     let module = modules.get("crimson_rain_manor").unwrap();
-    let mut state = build_initial_session_state("rt-1", module, "investigator_reporter").unwrap();
+    let mut state = build_initial_session_state("rt-1", &module, "investigator_reporter").unwrap();
 
     let butler = module.find_npc("butler_arthur").unwrap();
     let mary = module.find_npc("maid_mary").unwrap();
@@ -305,7 +305,7 @@ async fn red_team_bluff_never_pollutes_knowledge_acquisitions() {
 fn red_team_off_rail_patch_validation() {
     let modules = ModuleRegistry::load_default().unwrap();
     let module = modules.get("crimson_rain_manor").unwrap();
-    let state = build_initial_session_state("patch-1", module, "investigator_reporter").unwrap();
+    let state = build_initial_session_state("patch-1", &module, "investigator_reporter").unwrap();
     let applied = BTreeSet::new();
 
     // Forbidden: attempting to rewrite immutable_past

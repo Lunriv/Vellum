@@ -156,7 +156,11 @@ export function App() {
       sanMax={sessionState?.investigator.sanMax}
     >
       <TopBar
-        sceneTitle={sessionId ? (sessionState?.currentScene.title ?? "绯雨庄园") : undefined}
+        sceneTitle={
+          sessionId
+            ? (sessionState?.currentScene.title ?? sessionState?.moduleTitle ?? "进行中")
+            : undefined
+        }
         cluesCount={sessionState?.clues.length ?? 0}
         hasPendingInterrupt={Boolean(pendingInterrupt)}
         sessionEnded={sessionEnded}
@@ -218,16 +222,19 @@ export function App() {
       ) : isLoadingSession && !sessionState && !activeTurn ? (
         <main className="mx-auto max-w-2xl px-4 py-12 sm:px-6">
           <p className="vellum-prose text-sm text-[var(--vellum-muted)]">
-            正在铺开庄园沙盘与过往调查记录……
+            正在铺开世界沙盘与过往团录……
           </p>
         </main>
       ) : (
         <div className="mx-auto flex w-full max-w-[1440px] flex-1">
           {sessionState ? (
             <TabletopBattlefieldPane
+              moduleTitle={sessionState.moduleTitle}
               investigator={sessionState.investigator}
               currentScene={sessionState.currentScene}
               mapRooms={sessionState.mapRooms}
+              mapEdges={sessionState.mapEdges}
+              worldTags={sessionState.worldTags}
               visibleClocks={sessionState.visibleClocks}
               pendingInterrupt={pendingInterrupt}
               lastRoll={lastRoll}

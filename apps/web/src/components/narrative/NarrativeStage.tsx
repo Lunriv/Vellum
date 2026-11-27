@@ -150,7 +150,7 @@ export function NarrativeStage({
     >
       {transcript.length === 0 && !showActiveTurn && !pendingInterrupt ? (
         <p className="vellum-prose py-8 text-sm text-[var(--vellum-muted)]">
-          雨声正穿过庄园长廊，等待守秘人翻开第一页记录……
+          骰盘已就位，等待守秘人切入开场局面……
         </p>
       ) : null}
 

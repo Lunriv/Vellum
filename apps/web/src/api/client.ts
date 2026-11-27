@@ -11,6 +11,7 @@ import type {
   EvidenceNoteDTO,
   ExperienceMode,
   InvestigatorPresetDTO,
+  ModuleSummaryDTO,
   OocRequest,
   OocResponse,
   ResolveInterruptRequest,
@@ -45,7 +46,7 @@ export function createIdempotencyKey(): string {
 async function requestJson<T>(
   path: string,
   options: {
-    method?: "GET" | "POST" | "PATCH";
+    method?: "GET" | "POST" | "PATCH" | "DELETE";
     body?: unknown;
     idempotencyKey?: string;
     signal?: AbortSignal;
@@ -92,10 +93,44 @@ async function requestJson<T>(
 export const vellumApi = {
   getHealth: () => requestJson<{ status: string; llmMode: string }>("/api/health"),
 
-  listInvestigators: (moduleId: string) =>
-    requestJson<{ moduleId: string; moduleTitle: string; investigators: InvestigatorPresetDTO[] }>(
-      `/api/modules/${encodeURIComponent(moduleId)}/investigators`,
+  listModules: () => requestJson<{ modules: ModuleSummaryDTO[] }>("/api/modules"),
+
+  generateModule: (payload: {
+    prompt: string;
+    title?: string;
+    tone?: string;
+    sceneCount?: number;
+  }) =>
+    requestJson<{ module: ModuleSummaryDTO; investigators: InvestigatorPresetDTO[] }>(
+      "/api/modules/generate",
+      {
+        method: "POST",
+        body: payload,
+      },
     ),
+
+  importModule: (payload: { format: "json" | "yaml" | "text"; content: string; title?: string }) =>
+    requestJson<{ module: ModuleSummaryDTO; investigators: InvestigatorPresetDTO[] }>(
+      "/api/modules/import",
+      {
+        method: "POST",
+        body: payload,
+      },
+    ),
+
+  deleteModule: (moduleId: string) =>
+    requestJson<{ ok: boolean; moduleId: string }>(
+      `/api/modules/${encodeURIComponent(moduleId)}`,
+      { method: "DELETE" },
+    ),
+
+  listInvestigators: (moduleId: string) =>
+    requestJson<{
+      moduleId: string;
+      moduleTitle: string;
+      openingPrologue?: string;
+      investigators: InvestigatorPresetDTO[];
+    }>(`/api/modules/${encodeURIComponent(moduleId)}/investigators`),
 
   createSession: (payload: CreateSessionRequest, idempotencyKey = createIdempotencyKey()) =>
     requestJson<CreateSessionResponse>("/api/sessions", {

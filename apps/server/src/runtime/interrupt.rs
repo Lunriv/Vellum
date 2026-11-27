@@ -745,9 +745,15 @@ pub async fn resolve_interrupt_locked(
                 ));
             }
             let skill_cn = skill_display_label(&interrupt.skill);
+            let visible_clock_name = session_state
+                .clocks
+                .values()
+                .find(|c| c.visibility == crate::kernel::ClockVisibility::PlayerVisible)
+                .map(|c| c.name.as_str())
+                .unwrap_or("现场危机");
             let consequence = format!(
-                "若强行重试「{}」再次失手，你的举动将直接惊动庄园内的人并推进「庄园异象」危机进度，且可能损失 1 点理智（二次掷骰无补救机会）。",
-                skill_cn
+                "若强行重试「{}」再次失手，你的举动将直接惊动现场并推进「{}」危机进度，且可能损失 1 点理智（二次掷骰无补救机会）。",
+                skill_cn, visible_clock_name
             );
             interrupt.push_description = Some(trimmed.to_string());
             interrupt.push_consequence = Some(consequence);
@@ -925,7 +931,8 @@ pub async fn resolve_interrupt_locked(
             });
 
             let module = state.modules.get(&session_state.module_id);
-            let patch = build_client_state_patch(&session_state, version + 1, "active", module);
+            let patch =
+                build_client_state_patch(&session_state, version + 1, "active", module.as_ref());
             let buf = state.buffers.get_or_create(&turn_id);
             buf.push(
                 "state_delta",

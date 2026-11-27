@@ -18,20 +18,20 @@ function createTestQueryClient() {
 }
 
 const MULTI_VOICE_NARRATION = [
-  "【守秘人】暴雨顺着门厅彩色玻璃淌下，壁炉火星噼啪作响。",
-  "【老管家 Arthur】「外头山路早已断了，阁下还是先留在门厅暖暖身子吧。」",
-  "【直觉·心理学】他提到酒窖时，右手拇指明显摩挲了袖口边缘。",
-  "【抉择】灯影摇晃间，你打算直接拆穿他的戒备，还是先去书房？",
-  "【建议行动】\n1. [心理学] 盯住 Arthur 的袖口追问三年前的访客\n2. [侦查] 检查壁炉旁的家族肖像\n3. 礼貌颔首，转身前往书房",
+  "【守秘人】暴风雪把林场招待所的木窗吹得吱呀作响，壁炉火苗猛地一矮。",
+  "【值班主管老周】「电话线是被风刮断的，谁也不准进锅炉房。」",
+  "【直觉·心理学】他说到锅炉房时，右手下意识按住了腰间少了一把钥匙的铜环。",
+  "【抉择】你是直接逼问备用钥匙的下落，还是先溜进档案室？",
+  "【建议行动】\n1. [心理学] 盯住老周钥匙环追问昨夜去向\n2. [侦查] 翻看值班台被涂改的登记簿\n3. 先前往档案室避开视线",
 ].join("\n\n");
 
-function buildManorState(): ClientVisibleStateDTO {
+function buildCustomWorldState(): ClientVisibleStateDTO {
   return {
     session: {
-      sessionId: "sess-ab-1",
-      moduleId: "crimson_rain_manor",
+      sessionId: "sess-snow-1",
+      moduleId: "snowbound_lodge",
       moduleVersion: "1.0.0",
-      investigatorId: "investigator_reporter",
+      investigatorId: "inv_scout",
       experienceMode: "classic",
       status: "active",
       sessionVersion: 2,
@@ -39,94 +39,79 @@ function buildManorState(): ClientVisibleStateDTO {
       createdAt: "2026-11-27T00:00:00Z",
       updatedAt: "2026-11-27T00:00:02Z",
     },
+    moduleTitle: "林海雪站",
     investigator: {
-      investigatorId: "investigator_reporter",
-      name: "林砚",
-      occupation: "敏锐记者",
-      hp: 10,
-      hpMax: 10,
+      investigatorId: "inv_scout",
+      name: "陈默",
+      occupation: "独立调查员",
+      hp: 11,
+      hpMax: 11,
       mp: 12,
       mpMax: 12,
       san: 55,
       sanMax: 99,
       luck: 50,
       luckMax: 99,
-      characteristics: { INT: 75, EDU: 70, DEX: 60 },
-      skills: { spot_hidden: 70, psychology: 65, persuade: 60, locksmith: 25 },
+      characteristics: { INT: 75, EDU: 70, DEX: 65 },
+      skills: { spot_hidden: 70, psychology: 65, locksmith: 50 },
       inventory: [
-        { itemId: "fountain_pen", name: "钢笔", description: "报馆墨水钢笔。", quantity: 1 },
+        { itemId: "flashlight", name: "金属手电", description: "强光手电。", quantity: 1 },
       ],
       conditions: [],
     },
     currentScene: {
-      sceneId: "manor_foyer",
-      title: "门厅与外廊",
-      atmosphere: "rain_manor",
-      description: "高窗外雨线如帘。",
-      tags: ["entry"],
-      visitedSceneIds: ["manor_foyer"],
+      sceneId: "hub_lobby",
+      title: "接待大厅",
+      atmosphere: "fog",
+      description: "值班台后的登记簿还摊开在昨晚那一页。",
+      tags: ["hub"],
+      visitedSceneIds: ["hub_lobby"],
       exits: [
-        { targetSceneId: "study_room", label: "前往书房", accessible: true },
-        { targetSceneId: "maids_parlor", label: "前往女仆偏厅", accessible: true },
-        {
-          targetSceneId: "cellar_entrance",
-          label: "前往酒窖入口",
-          accessible: false,
-          blockedReason: "需先查看委托函",
-        },
+        { targetSceneId: "records_office", label: "前往档案室", accessible: true },
+        { targetSceneId: "boiler_room", label: "前往锅炉房", accessible: false, blockedReason: "铁门反锁" },
       ],
       presentEntities: [
         {
-          entityId: "butler_arthur",
-          name: "老管家 Arthur",
+          entityId: "npc_warden",
+          name: "值班主管老周",
           role: "gatekeeper",
           kind: "npc",
-          summary: "守在壁炉旁的老管家。",
+          summary: "攥着一串钥匙，神情紧绷。",
         },
         {
-          entityId: "manor_portrait",
-          name: "家族肖像",
+          entityId: "obj_register",
+          name: "值班登记簿",
           role: "object",
           kind: "object",
-          summary: "发暗的旧画像。",
+          summary: "纸页有异常涂改。",
         },
       ],
     },
     mapRooms: [
       {
-        sceneId: "manor_foyer",
-        title: "门厅与外廊",
-        atmosphere: "rain_manor",
+        sceneId: "hub_lobby",
+        title: "接待大厅",
+        atmosphere: "fog",
         visited: true,
         isCurrent: true,
         accessibleFromCurrent: false,
         exitLabelFromCurrent: null,
-        knownNpcs: [{ entityId: "butler_arthur", name: "老管家 Arthur" }],
+        knownNpcs: [{ entityId: "npc_warden", name: "值班主管老周" }],
       },
       {
-        sceneId: "study_room",
-        title: "书房",
+        sceneId: "records_office",
+        title: "档案室",
         atmosphere: "candlelight",
         visited: false,
         isCurrent: false,
         accessibleFromCurrent: true,
-        exitLabelFromCurrent: "前往书房",
+        exitLabelFromCurrent: "前往档案室",
         knownNpcs: [],
       },
       {
-        sceneId: "maids_parlor",
-        title: "女仆偏厅",
-        atmosphere: "candlelight",
-        visited: false,
-        isCurrent: false,
-        accessibleFromCurrent: true,
-        exitLabelFromCurrent: "前往女仆偏厅",
-        knownNpcs: [],
-      },
-      {
-        sceneId: "rain_courtyard",
-        title: "暴雨庭院",
-        atmosphere: "san_strain",
+        sceneId: "service_corridor",
+        title: "后勤通道",
+        atmosphere: "rain_manor",
         visited: false,
         isCurrent: false,
         accessibleFromCurrent: false,
@@ -134,23 +119,29 @@ function buildManorState(): ClientVisibleStateDTO {
         knownNpcs: [],
       },
       {
-        sceneId: "cellar_entrance",
-        title: "酒窖入口",
-        atmosphere: "fog",
+        sceneId: "boiler_room",
+        title: "锅炉房",
+        atmosphere: "san_strain",
         visited: false,
         isCurrent: false,
         accessibleFromCurrent: false,
-        exitLabelFromCurrent: "前往酒窖入口",
+        exitLabelFromCurrent: "前往锅炉房",
         knownNpcs: [],
       },
     ],
+    mapEdges: [
+      { fromSceneId: "hub_lobby", toSceneId: "records_office", bidirectional: true, locked: false },
+      { fromSceneId: "hub_lobby", toSceneId: "service_corridor", bidirectional: true, locked: false },
+      { fromSceneId: "hub_lobby", toSceneId: "boiler_room", bidirectional: true, locked: true },
+    ],
+    worldTags: ["generator_sabotaged"],
     visibleClocks: [
       {
-        clockId: "manor_anomaly",
-        name: "庄园异象",
+        clockId: "alert_pressure",
+        name: "警戒压力",
         current: 1,
         max: 6,
-        stageLabel: "雨声掩盖一切",
+        stageLabel: "表面平静",
       },
     ],
     clues: [],
@@ -161,7 +152,7 @@ function buildManorState(): ClientVisibleStateDTO {
         entryId: "tr-0",
         turnId: "turn-0",
         turnIndex: 0,
-        sceneId: "manor_foyer",
+        sceneId: "hub_lobby",
         playerInput: null,
         narration: MULTI_VOICE_NARRATION,
         narrationGeneration: 1,
@@ -172,11 +163,11 @@ function buildManorState(): ClientVisibleStateDTO {
   };
 }
 
-describe("A+B Fusion Tabletop Map & Multi-Voice Theater", () => {
+describe("Universal Tabletop Engine: Dynamic World Map, Multi-Voice Theater & World Generator", () => {
   beforeEach(() => {
     window.localStorage.clear();
     useGameStore.setState({
-      sessionId: "sess-ab-1",
+      sessionId: "sess-snow-1",
       theme: "dark",
       experienceMode: "classic",
       lowSanEffectsEnabled: true,
@@ -197,26 +188,26 @@ describe("A+B Fusion Tabletop Map & Multi-Voice Theater", () => {
     vi.restoreAllMocks();
   });
 
-  it("parses multi-voice tags and extracts 3 clickable choices cleanly", () => {
+  it("parses multi-voice tags and extracts clickable choices cleanly", () => {
     const parsed = parseTheaterNarration(MULTI_VOICE_NARRATION);
     expect(parsed.beats.map((b) => b.kind)).toEqual(["kp", "npc", "skill", "hook"]);
-    expect(parsed.beats[1].speaker).toBe("老管家 Arthur");
+    expect(parsed.beats[1].speaker).toBe("值班主管老周");
     expect(parsed.beats[2].speaker).toBe("直觉 · 心理学");
     expect(parsed.choices).toEqual([
-      "[心理学] 盯住 Arthur 的袖口追问三年前的访客",
-      "[侦查] 检查壁炉旁的家族肖像",
-      "礼貌颔首，转身前往书房",
+      "[心理学] 盯住老周钥匙环追问昨夜去向",
+      "[侦查] 翻看值班台被涂改的登记簿",
+      "先前往档案室避开视线",
     ]);
   });
 
-  it("renders multi-voice theater, clickable Manor map rooms, and 1-click Keeper choices", async () => {
+  it("renders arbitrary custom world dynamically on Auto-Layout World Map with world tags and 1-click travel", async () => {
     const user = userEvent.setup();
-    vi.spyOn(vellumApi, "getSessionState").mockResolvedValue(buildManorState());
+    vi.spyOn(vellumApi, "getSessionState").mockResolvedValue(buildCustomWorldState());
     const createTurnSpy = vi.spyOn(vellumApi, "createTurn").mockResolvedValue({
       turnId: "turn-next",
       turnIndex: 1,
       status: "routing",
-      streamUrl: "/api/sessions/sess-ab-1/turns/turn-next/events",
+      streamUrl: "/api/sessions/sess-snow-1/turns/turn-next/events",
     });
 
     render(
@@ -225,28 +216,106 @@ describe("A+B Fusion Tabletop Map & Multi-Voice Theater", () => {
       </QueryClientProvider>,
     );
 
-    // Multi-voice theater beats rendered
-    expect(await screen.findByText("守秘人 · KP")).toBeInTheDocument();
-    expect(screen.getByText("直觉 · 心理学")).toBeInTheDocument();
-    expect(screen.getByText("抉择时刻")).toBeInTheDocument();
+    expect(await screen.findByText("林海雪站 · 沙盘")).toBeInTheDocument();
+    expect(screen.getByText("generator_sabotaged")).toBeInTheDocument();
+    expect(screen.getByText("守秘人 · KP")).toBeInTheDocument();
 
-    // Manor map accessible room is directly clickable
-    const studyMapBtn = screen.getByRole("button", { name: "地图移动：前往书房" });
-    await user.click(studyMapBtn);
+    const mapBtn = screen.getByRole("button", { name: "地图移动：前往档案室" });
+    await user.click(mapBtn);
 
     await waitFor(() => {
-      expect(createTurnSpy).toHaveBeenCalledWith("sess-ab-1", { input: "前往书房" });
+      expect(createTurnSpy).toHaveBeenCalledWith("sess-snow-1", { input: "前往档案室" });
     });
   });
 
-  it("executes a Keeper contextual choice immediately in one click", async () => {
+  it("supports generating a brand-new playable world directly from the Engine Lobby", async () => {
     const user = userEvent.setup();
-    vi.spyOn(vellumApi, "getSessionState").mockResolvedValue(buildManorState());
-    const createTurnSpy = vi.spyOn(vellumApi, "createTurn").mockResolvedValue({
-      turnId: "turn-choice",
-      turnIndex: 1,
-      status: "routing",
-      streamUrl: "/api/sessions/sess-ab-1/turns/turn-choice/events",
+    useGameStore.setState({ sessionId: null });
+
+    const listModulesSpy = vi
+      .spyOn(vellumApi, "listModules")
+      .mockResolvedValueOnce({
+        modules: [
+          {
+            moduleId: "demo_world",
+            version: "1.0.0",
+            title: "内置演示",
+            openingPrologue: "样板开场。",
+            sourceKind: "builtin",
+            sceneCount: 4,
+            npcCount: 2,
+            investigatorCount: 1,
+            clueCount: 4,
+          },
+        ],
+      })
+      .mockResolvedValue({
+        modules: [
+          {
+            moduleId: "gen_cyber_01",
+            version: "1.0.0",
+            title: "九龙暗诊",
+            openingPrologue: "2079年霓虹暴雨中的地下义体诊所。",
+            sourceKind: "generated",
+            sceneCount: 4,
+            npcCount: 2,
+            investigatorCount: 1,
+            clueCount: 5,
+          },
+        ],
+      });
+
+    vi.spyOn(vellumApi, "listInvestigators").mockResolvedValue({
+      moduleId: "demo_world",
+      moduleTitle: "内置演示",
+      investigators: [
+        {
+          investigatorId: "inv_1",
+          name: "测试员",
+          occupation: "调查员",
+          tagline: "测试",
+          biography: "简介",
+          motivation: "动机",
+          manorConnection: "渊源",
+          hpMax: 10,
+          mpMax: 10,
+          sanStart: 50,
+          luckStart: 50,
+          strengths: [],
+          startingItems: [],
+        },
+      ],
+    });
+
+    const generateSpy = vi.spyOn(vellumApi, "generateModule").mockResolvedValue({
+      module: {
+        moduleId: "gen_cyber_01",
+        version: "1.0.0",
+        title: "九龙暗诊",
+        openingPrologue: "2079年霓虹暴雨中的地下义体诊所。",
+        sourceKind: "generated",
+        sceneCount: 4,
+        npcCount: 2,
+        investigatorCount: 1,
+        clueCount: 5,
+      },
+      investigators: [
+        {
+          investigatorId: "inv_hacker",
+          name: "阿哲",
+          occupation: "义体维修师",
+          tagline: "芯片不会撒谎",
+          biography: "熟悉黑市义体接口。",
+          motivation: "找回失踪搭档的记忆备份。",
+          manorConnection: "曾为诊所修过神经终端。",
+          hpMax: 10,
+          mpMax: 12,
+          sanStart: 55,
+          luckStart: 50,
+          strengths: [{ skill: "spot_hidden", label: "侦查", rating: 70 }],
+          startingItems: [{ itemId: "deck", name: "解码器", description: "读取芯片日志。" }],
+        },
+      ],
     });
 
     render(
@@ -255,15 +324,17 @@ describe("A+B Fusion Tabletop Map & Multi-Voice Theater", () => {
       </QueryClientProvider>,
     );
 
-    const choiceBtn = await screen.findByRole("button", {
-      name: /盯住 Arthur 的袖口追问三年前的访客/,
-    });
-    await user.click(choiceBtn);
+    await screen.findByText("选择调查员身份");
+    await user.click(screen.getByRole("button", { name: "一句话生成世界" }));
+    await user.type(screen.getByLabelText("世界设定描述"), "2079年赛博地下义体诊所记忆失窃案");
+    await user.click(screen.getByRole("button", { name: "编译生成可玩世界" }));
 
     await waitFor(() => {
-      expect(createTurnSpy).toHaveBeenCalledWith("sess-ab-1", {
-        input: "[心理学] 盯住 Arthur 的袖口追问三年前的访客",
-      });
+      expect(generateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ prompt: "2079年赛博地下义体诊所记忆失窃案" }),
+      );
     });
+    expect(await screen.findByText("阿哲")).toBeInTheDocument();
+    expect(listModulesSpy).toHaveBeenCalled();
   });
 });

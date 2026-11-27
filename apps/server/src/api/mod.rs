@@ -10,7 +10,7 @@ use axum::{
         sse::{Event, KeepAlive, Sse},
         IntoResponse, Response,
     },
-    routing::{get, patch, post},
+    routing::{delete, get, patch, post},
     Router,
 };
 use chrono::Utc;
@@ -23,10 +23,14 @@ use utoipa::{OpenApi, ToSchema};
 use uuid::Uuid;
 
 use crate::kernel::{GameEventKind, TurnStatus};
+use crate::modules::{
+    generator::{parse_and_sanitize_module_value, WorldGenRequest},
+    ModuleIr,
+};
 use crate::persistence::{
     db::Database,
     event_repo::{self, EvidenceNoteRow},
-    session_repo, turn_repo,
+    module_repo, session_repo, turn_repo,
 };
 use crate::runtime::{
     debrief,
@@ -84,6 +88,27 @@ struct CreateEvidenceNoteRequest {
     from_clue_id: Option<String>,
     to_clue_id: Option<String>,
     label: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+struct ImportModuleRequest {
+    format: String,
+    content: String,
+    #[serde(default)]
+    title: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+struct GenerateModuleRequest {
+    prompt: String,
+    #[serde(default)]
+    title: Option<String>,
+    #[serde(default)]
+    tone: Option<String>,
+    #[serde(default)]
+    scene_count: Option<u8>,
 }
 
 #[derive(OpenApi)]
@@ -211,6 +236,10 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/api/health", get(health))
         .route("/api/openapi.json", get(openapi))
+        .route("/api/modules", get(list_modules))
+        .route("/api/modules/generate", post(generate_module))
+        .route("/api/modules/import", post(import_module))
+        .route("/api/modules/{module_id}", delete(delete_module))
         .route(
             "/api/modules/{module_id}/investigators",
             get(list_investigators),
@@ -265,16 +294,8 @@ async fn health(State(state): State<AppState>) -> Json<Value> {
     }))
 }
 
-async fn list_investigators(
-    State(state): State<AppState>,
-    Path(module_id): Path<String>,
-) -> Response {
-    let Some(module) = state.modules.get(&module_id) else {
-        return error(StatusCode::NOT_FOUND, "NOT_FOUND", "Module not found");
-    };
-
-    // Return ONLY player-visible investigator fields (never Keeper-only secrets)
-    let investigators: Vec<Value> = module
+fn investigators_dto(module: &ModuleIr) -> Vec<Value> {
+    module
         .investigators
         .iter()
         .map(|inv| {
@@ -294,12 +315,232 @@ async fn list_investigators(
                 "startingItems": inv.starting_items,
             })
         })
-        .collect();
+        .collect()
+}
+
+async fn list_modules(State(state): State<AppState>) -> Json<Value> {
+    Json(json!({
+        "modules": state.modules.list_summaries(),
+    }))
+}
+
+async fn generate_module(
+    State(state): State<AppState>,
+    Json(req): Json<GenerateModuleRequest>,
+) -> Response {
+    let trimmed = req.prompt.trim();
+    if trimmed.is_empty() {
+        return error(
+            StatusCode::BAD_REQUEST,
+            "INVALID_REQUEST",
+            "请先输入世界设定、题材想法或剧本大纲",
+        );
+    }
+
+    let gen_req = WorldGenRequest {
+        prompt: trimmed.to_string(),
+        title: req.title,
+        tone: req.tone,
+        scene_count: req.scene_count,
+    };
+
+    let mut module = match state.provider.generate_world(&gen_req).await {
+        Ok(m) => m,
+        Err(msg) => return error(StatusCode::UNPROCESSABLE_ENTITY, "WORLD_GEN_FAILED", &msg),
+    };
+
+    // Never overwrite an existing built-in module ID
+    if state.modules.is_builtin(&module.module_id) {
+        let suffix = &Uuid::new_v4().simple().to_string()[..6];
+        module.module_id = format!("{}_{suffix}", module.module_id);
+    }
+
+    let summary =
+        match state
+            .modules
+            .register(module.clone(), "generated", Some(trimmed.to_string()))
+        {
+            Ok(s) => s,
+            Err(e) => {
+                return error(
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                    "MODULE_VALIDATION_FAILED",
+                    &e.to_string(),
+                )
+            }
+        };
+
+    if let Err(e) = module_repo::upsert(&state.db, &module, "generated", Some(trimmed)).await {
+        return error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "DATABASE_ERROR",
+            &e.to_string(),
+        );
+    }
+
+    (
+        StatusCode::CREATED,
+        Json(json!({
+            "module": summary,
+            "investigators": investigators_dto(&module),
+        })),
+    )
+        .into_response()
+}
+
+async fn import_module(
+    State(state): State<AppState>,
+    Json(req): Json<ImportModuleRequest>,
+) -> Response {
+    let raw = req.content.trim();
+    if raw.is_empty() {
+        return error(
+            StatusCode::BAD_REQUEST,
+            "INVALID_REQUEST",
+            "导入内容不能为空",
+        );
+    }
+
+    let format = req.format.trim().to_lowercase();
+    let mut module = match format.as_str() {
+        "json" => match serde_json::from_str::<Value>(raw) {
+            Ok(parsed) => match parse_and_sanitize_module_value(parsed, None) {
+                Ok(valid) => valid,
+                Err(e) => {
+                    return error(
+                        StatusCode::UNPROCESSABLE_ENTITY,
+                        "MODULE_VALIDATION_FAILED",
+                        &e,
+                    )
+                }
+            },
+            Err(e) => {
+                return error(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_MODULE_JSON",
+                    &format!("JSON 格式不合法：{e}"),
+                )
+            }
+        },
+        "yaml" | "yml" => match serde_yaml::from_str::<Value>(raw) {
+            Ok(parsed) => match parse_and_sanitize_module_value(parsed, None) {
+                Ok(valid) => valid,
+                Err(e) => {
+                    return error(
+                        StatusCode::UNPROCESSABLE_ENTITY,
+                        "MODULE_VALIDATION_FAILED",
+                        &e,
+                    )
+                }
+            },
+            Err(e) => {
+                return error(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_MODULE_YAML",
+                    &format!("YAML 格式不合法：{e}"),
+                )
+            }
+        },
+        "text" => {
+            let gen_req = WorldGenRequest {
+                prompt: raw.to_string(),
+                title: req.title.clone(),
+                tone: None,
+                scene_count: None,
+            };
+            match state.provider.generate_world(&gen_req).await {
+                Ok(m) => m,
+                Err(msg) => {
+                    return error(
+                        StatusCode::UNPROCESSABLE_ENTITY,
+                        "WORLD_COMPILE_FAILED",
+                        &msg,
+                    )
+                }
+            }
+        }
+        _ => {
+            return error(
+                StatusCode::BAD_REQUEST,
+                "INVALID_REQUEST",
+                "format 仅支持 json、yaml 或 text",
+            )
+        }
+    };
+
+    if let Some(title) = req
+        .title
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        module.title = title.to_string();
+    }
+    if state.modules.is_builtin(&module.module_id) {
+        let suffix = &Uuid::new_v4().simple().to_string()[..6];
+        module.module_id = format!("{}_{suffix}", module.module_id);
+    }
+
+    let summary = match state.modules.register(module.clone(), "imported", None) {
+        Ok(s) => s,
+        Err(e) => {
+            return error(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "MODULE_VALIDATION_FAILED",
+                &e.to_string(),
+            )
+        }
+    };
+
+    if let Err(e) = module_repo::upsert(&state.db, &module, "imported", None).await {
+        return error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "DATABASE_ERROR",
+            &e.to_string(),
+        );
+    }
+
+    (
+        StatusCode::CREATED,
+        Json(json!({
+            "module": summary,
+            "investigators": investigators_dto(&module),
+        })),
+    )
+        .into_response()
+}
+
+async fn delete_module(State(state): State<AppState>, Path(module_id): Path<String>) -> Response {
+    if state.modules.is_builtin(&module_id) {
+        return error(
+            StatusCode::FORBIDDEN,
+            "BUILTIN_MODULE_PROTECTED",
+            "内置演示模组不可删除",
+        );
+    }
+    match state.modules.remove_custom(&module_id) {
+        Ok(true) => {
+            let _ = module_repo::delete(&state.db, &module_id).await;
+            Json(json!({ "ok": true, "moduleId": module_id })).into_response()
+        }
+        Ok(false) => error(StatusCode::NOT_FOUND, "NOT_FOUND", "Module not found"),
+        Err(msg) => error(StatusCode::FORBIDDEN, "FORBIDDEN", &msg),
+    }
+}
+
+async fn list_investigators(
+    State(state): State<AppState>,
+    Path(module_id): Path<String>,
+) -> Response {
+    let Some(module) = state.modules.get(&module_id) else {
+        return error(StatusCode::NOT_FOUND, "NOT_FOUND", "Module not found");
+    };
 
     Json(json!({
         "moduleId": module.module_id,
         "moduleTitle": module.title,
-        "investigators": investigators,
+        "openingPrologue": module.opening_prologue,
+        "investigators": investigators_dto(&module),
     }))
     .into_response()
 }
@@ -336,7 +577,7 @@ async fn create_session(
         );
     }
 
-    let Some(module) = state.modules.get(&req.module_id).cloned() else {
+    let Some(module) = state.modules.get(&req.module_id) else {
         return error(StatusCode::NOT_FOUND, "NOT_FOUND", "Module not found");
     };
 
@@ -525,17 +766,21 @@ async fn get_state(State(state): State<AppState>, Path(session_id): Path<String>
         .ok()
         .flatten();
 
+    let world_tags: Vec<&String> = session_state.events.iter().collect();
     Json(json!({
         "session": meta,
+        "moduleTitle": module.as_ref().map(|m| m.title.as_str()).unwrap_or(&meta.module_id),
         "investigator": session_state.investigator,
-        "currentScene": orchestrator::visible_scene_dto(&session_state, module),
-        "mapRooms": orchestrator::map_rooms_dto(&session_state, module),
+        "currentScene": orchestrator::visible_scene_dto(&session_state, module.as_ref()),
+        "mapRooms": orchestrator::map_rooms_dto(&session_state, module.as_ref()),
+        "mapEdges": orchestrator::map_edges_dto(&session_state, module.as_ref()),
+        "worldTags": world_tags,
         "visibleClocks": orchestrator::visible_clocks_dto(&session_state),
         "clues": session_state.clues.values().cloned().collect::<Vec<_>>(),
         "handouts": session_state.handouts.values().cloned().collect::<Vec<_>>(),
         "pendingInterrupt": active_interrupt,
         "transcript": transcript_items,
-        "guidedPrompts": orchestrator::guided_prompts_for_scene(&session_state.current_scene.scene_id),
+        "guidedPrompts": orchestrator::guided_prompts_for_scene(&session_state, module.as_ref()),
     }))
     .into_response()
 }
@@ -1007,10 +1252,11 @@ async fn ooc_handler(
         return error(StatusCode::NOT_FOUND, "NOT_FOUND", "Session not found");
     };
 
+    let module = state.modules.get(&session_state.module_id);
     let recent_history = orchestrator::load_recent_history(&state.db, &session_id, 4).await;
     let answer = match state
         .provider
-        .answer_ooc(question, &session_state, &recent_history)
+        .answer_ooc(question, &session_state, module.as_ref(), &recent_history)
         .await
     {
         Ok(a) => a,
@@ -1159,6 +1405,6 @@ async fn get_debrief(State(state): State<AppState>, Path(session_id): Path<Strin
         .await
         .unwrap_or_default();
 
-    let dto = debrief::build_case_debrief(&session_id, &session_state, &events, module);
+    let dto = debrief::build_case_debrief(&session_id, &session_state, &events, &module);
     Json(dto).into_response()
 }

@@ -113,6 +113,19 @@ export interface VisibleSceneDTO {
   presentEntities: SceneEntityDTO[];
 }
 
+export interface ModuleSummaryDTO {
+  moduleId: string;
+  version: string;
+  title: string;
+  openingPrologue: string;
+  sourceKind: "builtin" | "generated" | "imported" | string;
+  sourcePrompt?: string | null;
+  sceneCount: number;
+  npcCount: number;
+  investigatorCount: number;
+  clueCount: number;
+}
+
 export interface MapRoomDTO {
   sceneId: string;
   title: string;
@@ -122,6 +135,13 @@ export interface MapRoomDTO {
   accessibleFromCurrent: boolean;
   exitLabelFromCurrent?: string | null;
   knownNpcs: Array<{ entityId: string; name: string }>;
+}
+
+export interface MapEdgeDTO {
+  fromSceneId: string;
+  toSceneId: string;
+  bidirectional: boolean;
+  locked: boolean;
 }
 
 export interface VisibleClockDTO {
@@ -240,9 +260,12 @@ export interface SessionMetaDTO {
 
 export interface ClientVisibleStateDTO {
   session: SessionMetaDTO;
+  moduleTitle?: string;
   investigator: InvestigatorStateDTO;
   currentScene: VisibleSceneDTO;
   mapRooms?: MapRoomDTO[];
+  mapEdges?: MapEdgeDTO[];
+  worldTags?: string[];
   visibleClocks: VisibleClockDTO[];
   clues: ClueDTO[];
   handouts: HandoutDTO[];
@@ -254,9 +277,12 @@ export interface ClientVisibleStateDTO {
 export interface ClientVisibleStatePatch {
   sessionVersion?: number;
   sessionStatus?: SessionStatus;
+  moduleTitle?: string;
   investigator?: Partial<InvestigatorStateDTO>;
   currentScene?: VisibleSceneDTO;
   mapRooms?: MapRoomDTO[];
+  mapEdges?: MapEdgeDTO[];
+  worldTags?: string[];
   visibleClocks?: VisibleClockDTO[];
   addedClues?: ClueDTO[];
   addedHandouts?: HandoutDTO[];

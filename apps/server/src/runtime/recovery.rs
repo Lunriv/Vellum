@@ -233,6 +233,7 @@ pub async fn run_narration_recovery(
         .and_then(|t| t.player_input)
         .unwrap_or_else(|| "继续观察当前现场".into());
 
+    let module = state.modules.get(&session_state.module_id);
     let history = orchestrator::load_recent_history(&state.db, &session_id, 6).await;
     let narration_ctx = NarrationContext {
         history: &history,
@@ -242,7 +243,7 @@ pub async fn run_narration_recovery(
 
     let chunks = match state
         .provider
-        .stream_narration(&turn_input, &session_state, &narration_ctx)
+        .stream_narration(&turn_input, &session_state, module.as_ref(), &narration_ctx)
         .await
     {
         Ok(c) => c,
